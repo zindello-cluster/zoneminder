@@ -10,6 +10,11 @@ canvas.detections {
 .zoompan {
   position: relative;
 }
+.live-status {
+  text-align: center;
+  font-size: 0.9em;
+  opacity: 0.8;
+}
 #toggleBoxesButton.off .material-icons,
 #liveBoxesButton.off .material-icons {
   opacity: 0.5;

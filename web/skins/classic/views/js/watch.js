@@ -1393,7 +1393,25 @@ function changePlayer() {
 // the camera's new rows are fetched every half second, so every frame is drawn with its own
 // boxes. With Boxes off, frames are shown as they arrive. Live off hands the picture back to
 // ZoneMinder's stream.
-var zmLive = {on: false, boxes: null, overlay: null, abort: null, poll: null, newest: 0, shown: null, timers: []};
+var zmLive = {on: false, boxes: null, overlay: null, abort: null, poll: null, newest: 0, shown: null, timers: [],
+  frames: 0, failures: 0, retry: null};
+
+// A line under the picture saying what Live is doing, and why it stopped if it did.
+function liveStatus(text) {
+  const img = monitorStream ? monitorStream.getElement() : null;
+  let el = document.getElementById('liveStatus');
+  if (!el && img) {
+    el = document.createElement('div');
+    el.id = 'liveStatus';
+    el.className = 'live-status';
+    const box = img.closest('.zoompan') || img.parentNode;
+    box.parentNode.insertBefore(el, box.nextSibling);
+  }
+  if (el) {
+    el.textContent = text || '';
+    el.style.display = text ? '' : 'none';
+  }
+}
 
 function liveUrl() {
   // As MonitorStream.start builds it, with a connkey of its own: zms is one process per stream.
@@ -1460,11 +1478,27 @@ function liveStart() {
   zmLive.overlay = ZMDetections.overlay(img, {visible: zmLive.boxes !== false});
   zmLive.newest = 0;
   zmLive.on = true;
-  zmLive.abort = new AbortController();
+  zmLive.frames = 0;
+  zmLive.failures = 0;
   livePoll();
   zmLive.poll = setInterval(livePoll, 500);
+  liveStatus('Live: connecting…');
+  liveRead(img);
+  liveButtons();
+}
+
+// One stream from zms. When it ends or fails while Live is on, it's opened again after a second;
+// three in a row that bring no frames stop Live, with the reason under the picture.
+function liveRead(img) {
+  zmLive.abort = new AbortController();
+  let got = 0;
   ZMDetections.readStream(liveUrl(), function(blob, stamp) {
     if (!zmLive.on) return;
+    got++;
+    zmLive.frames++;
+    if (zmLive.frames == 1 || zmLive.frames % 25 == 0) {
+      liveStatus('Live: ' + zmLive.frames + ' frames' + (stamp ? '' : ', but without their times, so no boxes'));
+    }
     if (zmLive.boxes === false) {
       liveShow(img, blob, stamp);
     } else {
@@ -1474,15 +1508,30 @@ function liveStart() {
       }, 1000);
       zmLive.timers.push(timer);
     }
-  }, zmLive.abort.signal).catch(function(e) {
-    console.log('live: ' + e);
-    if (zmLive.on) liveStop();
+  }, zmLive.abort.signal).then(function() {
+    return 'the stream ended';
+  }, function(e) {
+    return 'the stream failed: ' + (e && e.message ? e.message : e);
+  }).then(function(reason) {
+    if (!zmLive.on) return;
+    console.log('live: ' + reason + ' after ' + got + ' frames');
+    zmLive.failures = got ? 0 : zmLive.failures + 1;
+    if (zmLive.failures >= 3) {
+      liveStop('Live stopped: ' + reason + ', three times without a frame.');
+      return;
+    }
+    liveStatus('Live: ' + reason + ' after ' + got + ' frames; reconnecting…');
+    zmLive.retry = setTimeout(function() {
+      zmLive.retry = null;
+      if (zmLive.on) liveRead(img);
+    }, 1000);
   });
-  liveButtons();
 }
 
-function liveStop() {
+function liveStop(why) {
   zmLive.on = false;
+  if (zmLive.retry) clearTimeout(zmLive.retry);
+  zmLive.retry = null;
   if (zmLive.abort) zmLive.abort.abort();
   if (zmLive.poll) clearInterval(zmLive.poll);
   zmLive.timers.forEach(clearTimeout);
@@ -1492,6 +1541,7 @@ function liveStop() {
   if (zmLive.shown) URL.revokeObjectURL(zmLive.shown);
   zmLive.shown = null;
   liveButtons();
+  liveStatus(typeof why === 'string' ? why : '');
   if (monitorStream) {
     monitorStream.start(monitorStream.currentChannelStream);
     onPlay();
@@ -1499,7 +1549,7 @@ function liveStop() {
 }
 
 function liveToggle() {
-  if (zmLive.on) liveStop(); else liveStart();
+  if (zmLive.on) liveStop(''); else liveStart();
 }
 
 function liveBoxesToggle() {
