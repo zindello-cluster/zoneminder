@@ -214,6 +214,9 @@ if ( $Event->Id() and !file_exists($Event->Path()) )
     <button id="toggleZonesButton" class="btn btn-<?php echo $showZones?'normal':'secondary'?>" title="<?php echo translate(($showZones?'Hide':'Show').' Zones')?>" ><span class="material-icons"><?php echo $showZones?'layers_clear':'layers'?></span</button>
 <?php
   }
+  // zindello-cluster: live detection's boxes over the recording, on or off (docs/live-detection.md,
+  // "Recorded events"). Anyone who can see the event can see its boxes.
+  echo '<button id="toggleBoxesButton" class="btn btn-normal" title="'.translate('Boxes').'"><span class="material-icons">crop_free</span></button>';
   } // end if Event->Id
 ?>
       </div>
@@ -469,6 +472,8 @@ if ($video_tag) {
   <script src="./js/videojs.zoomrotate.js"></script>
 <?php
   echo output_link_if_exists(array('css/base/zones.css'));
+  echo output_link_if_exists(array('css/base/detections.css'));  // zindello-cluster: live detection
+  echo output_script_if_exists(array('js/detections.js'));
   echo output_script_if_exists(array('js/leaflet/leaflet.js'), false);
   echo output_link_if_exists(array('js/leaflet/leaflet.css'), false);
   xhtmlFooter();

@@ -1462,6 +1462,7 @@ function initPage() {
       // rate should be 100 = 1x, etc.
       vid.playbackRate(rate/100);
     }
+    initDetections(vid);  // zindello-cluster: live detection's boxes
   } else {
     streamCmdInterval = setInterval(streamQuery, streamTimeout); //Timeout is refresh rate for progressBox and time display
     if (canStreamNative) {
@@ -1814,6 +1815,8 @@ function initPage() {
 
   const toggleZonesButton = document.getElementById('toggleZonesButton');
   if (toggleZonesButton) toggleZonesButton.addEventListener('click', toggleZones);
+  const toggleBoxesButton = document.getElementById('toggleBoxesButton');  // zindello-cluster
+  if (toggleBoxesButton) toggleBoxesButton.addEventListener('click', toggleBoxes);
 } // end initPage
 
 function addOrCreateTag(tagValue) {
@@ -1993,3 +1996,74 @@ function panZoomOut(el) {
 
 // Kick everything off
 $j( window ).on("load", initPage);
+
+// zindello-cluster: live detection's boxes over the recording, exact by video time
+// (external-security.zindello.com.au/docs/live-detection.md, "Recorded events"). On opening the
+// event the page asks once for its exact start and every stored frame between its start and end.
+// On every frame the browser shows, requestVideoFrameCallback gives that frame's video time;
+// stamp = video_start + video time, and the newest stored frame at or before it is drawn if it's
+// within 1.5 sampling intervals. Play, pause, seek and slow motion all work the same way. Where
+// the browser lacks requestVideoFrameCallback, an animation-frame loop reads currentTime instead.
+var zmDetections = null;
+
+function initDetections(player) {
+  if (typeof ZMDetections === 'undefined' || !eventData.Id) return;
+  const video = player.el().querySelector('video');
+  if (!video) return;
+  $j.getJSON(thisUrl + '?request=detections&what=event&eid=' + eventData.Id)
+      .done(function(data) {
+        if (data.result != 'Ok') return;
+        const cookie = getCookie('zmEventShowBoxes' + eventData.MonitorId);
+        const visible = cookie ? (cookie == '1') : !!data.boxes_default;
+        zmDetections = ZMDetections.overlay(video, {interval: data.interval, visible: visible});
+        zmDetections.setFrames(data.frames);
+        zmDetections.videoStart = data.video_start;
+        setBoxesButton(visible, data.frames.length);
+        const draw = function() {
+          zmDetections.drawAt(zmDetections.videoStart + video.currentTime);
+        };
+        if ('requestVideoFrameCallback' in video) {
+          const onFrame = function(now, meta) {
+            zmDetections.drawAt(zmDetections.videoStart + meta.mediaTime);
+            video.requestVideoFrameCallback(onFrame);
+          };
+          video.requestVideoFrameCallback(onFrame);
+        } else {
+          const loop = function() {
+            if (!video.paused && !video.ended) {
+              draw();
+              requestAnimationFrame(loop);
+            }
+          };
+          video.addEventListener('play', function() {
+            requestAnimationFrame(loop);
+          });
+          if (!video.paused) requestAnimationFrame(loop);
+        }
+        video.addEventListener('seeked', draw);
+        video.addEventListener('pause', draw);
+        window.addEventListener('resize', draw);
+        draw();
+      })
+      .fail(logAjaxFail);
+}
+
+function setBoxesButton(on, count) {
+  const button = document.getElementById('toggleBoxesButton');
+  if (!button) return;
+  button.classList.toggle('off', !on);
+  button.setAttribute('title', (on ? 'Hide boxes' : 'Show boxes') +
+    (count === undefined ? '' : ' (' + count + ' frames with something in them)'));
+}
+
+function toggleBoxes() {
+  if (!zmDetections) return;
+  const on = !zmDetections.visible;
+  zmDetections.show(on);
+  setCookie('zmEventShowBoxes' + eventData.MonitorId, on ? '1' : '0');
+  setBoxesButton(on, zmDetections.frames.length);
+  if (on) {
+    const video = document.querySelector('#videoobj video');
+    if (video) zmDetections.drawAt(zmDetections.videoStart + video.currentTime);
+  }
+}
