@@ -1,0 +1,16 @@
+/* zindello-cluster: live detection's boxes, a canvas laid over the picture inside the zoom-and-pan
+   box (external-security.zindello.com.au/docs/live-detection.md, "The viewer"). */
+canvas.detections {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+.zoompan {
+  position: relative;
+}
+#toggleBoxesButton.off .material-icons,
+#liveBoxesButton.off .material-icons {
+  opacity: 0.5;
+}
