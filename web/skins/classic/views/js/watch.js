@@ -1386,6 +1386,147 @@ function changePlayer() {
   }, 300);*/
 }
 
+// zindello-cluster: Live with boxes (external-security.zindello.com.au/docs/live-detection.md,
+// "Live: matched by frame stamp"). The Live button stops ZoneMinder's own <img> stream and reads
+// the same stream URL with fetch(), frame by frame, each with its X-Timestamp: the capture stamp
+// the live sidecar stores. With Boxes on, each frame is shown one second late, and in that second
+// the camera's new rows are fetched every half second, so every frame is drawn with its own
+// boxes. With Boxes off, frames are shown as they arrive. Live off hands the picture back to
+// ZoneMinder's stream.
+var zmLive = {on: false, boxes: null, overlay: null, abort: null, poll: null, newest: 0, shown: null, timers: []};
+
+function liveUrl() {
+  // As MonitorStream.start builds it, with a connkey of its own: zms is one process per stream.
+  let src = monitorStream.url_to_zms.replace(/mode=single/i, 'mode=jpeg');
+  if (-1 == src.search('auth') && auth_relay) {
+    src += '&' + auth_relay;
+  } else if (-1 != src.search('auth')) {
+    src = src.replace(/auth=\w+/i, 'auth=' + auth_hash);
+  }
+  src += '&connkey=' + (100000 + Math.floor(Math.random() * 900000));
+  if (-1 == src.search('scale=')) src += '&scale=' + monitorStream.scale;
+  if (-1 == src.search('mode=')) src += '&mode=jpeg';
+  return src;
+}
+
+function liveButtons() {
+  const live = document.getElementById('liveButton');
+  const boxes = document.getElementById('liveBoxesButton');
+  if (live) {
+    live.classList.toggle('btn-primary', zmLive.on);
+    live.classList.toggle('btn-secondary', !zmLive.on);
+  }
+  if (boxes) {
+    boxes.classList.toggle('off', zmLive.boxes === false);
+    boxes.setAttribute('title', zmLive.boxes === false ? 'Show boxes' : 'Hide boxes');
+  }
+}
+
+function liveShow(img, blob, stamp) {
+  const url = URL.createObjectURL(blob);
+  const old = zmLive.shown;
+  img.onload = function() {
+    if (old) URL.revokeObjectURL(old);
+    if (zmLive.overlay && stamp) zmLive.overlay.drawAt(stamp);
+  };
+  img.src = url;
+  zmLive.shown = url;
+}
+
+function livePoll() {
+  $j.getJSON(thisUrl + '?request=detections&what=live&mid=' + monitorId + '&since=' + zmLive.newest)
+      .done(function(data) {
+        if (data.result != 'Ok' || !zmLive.overlay) return;
+        if (zmLive.boxes === null) {
+          zmLive.boxes = !!data.boxes_default;
+          zmLive.overlay.show(zmLive.boxes);
+          liveButtons();
+        }
+        zmLive.overlay.interval = data.interval;
+        zmLive.overlay.addFrames(data.frames, 30);
+        zmLive.newest = Math.max(zmLive.newest, zmLive.overlay.newest());
+      });
+}
+
+function liveStart() {
+  const img = monitorStream ? monitorStream.getElement() : null;
+  if (!img || img.tagName != 'IMG' || typeof ZMDetections === 'undefined') {
+    alert('Live needs the ZMS player.');
+    return;
+  }
+  monitorStream.stop();  // kills ZoneMinder's zms for this page; the last picture stays
+  const cookie = getCookie('zmWatchShowBoxes' + monitorId);
+  zmLive.boxes = cookie ? (cookie == '1') : null;  // null: the camera's default, from the first reply
+  zmLive.overlay = ZMDetections.overlay(img, {visible: zmLive.boxes !== false});
+  zmLive.newest = 0;
+  zmLive.on = true;
+  zmLive.abort = new AbortController();
+  livePoll();
+  zmLive.poll = setInterval(livePoll, 500);
+  ZMDetections.readStream(liveUrl(), function(blob, stamp) {
+    if (!zmLive.on) return;
+    if (zmLive.boxes === false) {
+      liveShow(img, blob, stamp);
+    } else {
+      const timer = setTimeout(function() {
+        zmLive.timers.shift();
+        if (zmLive.on) liveShow(img, blob, stamp);
+      }, 1000);
+      zmLive.timers.push(timer);
+    }
+  }, zmLive.abort.signal).catch(function(e) {
+    console.log('live: ' + e);
+    if (zmLive.on) liveStop();
+  });
+  liveButtons();
+}
+
+function liveStop() {
+  zmLive.on = false;
+  if (zmLive.abort) zmLive.abort.abort();
+  if (zmLive.poll) clearInterval(zmLive.poll);
+  zmLive.timers.forEach(clearTimeout);
+  zmLive.timers = [];
+  if (zmLive.overlay) zmLive.overlay.remove();
+  zmLive.overlay = null;
+  if (zmLive.shown) URL.revokeObjectURL(zmLive.shown);
+  zmLive.shown = null;
+  liveButtons();
+  if (monitorStream) {
+    monitorStream.start(monitorStream.currentChannelStream);
+    onPlay();
+  }
+}
+
+function liveToggle() {
+  if (zmLive.on) liveStop(); else liveStart();
+}
+
+function liveBoxesToggle() {
+  const on = zmLive.boxes === false;  // null (not yet known) counts as on
+  zmLive.boxes = on;
+  setCookie('zmWatchShowBoxes' + monitorId, on ? '1' : '0');
+  if (zmLive.overlay) zmLive.overlay.show(on);
+  if (!on) {
+    zmLive.timers.forEach(clearTimeout);  // the held frames go now
+    zmLive.timers = [];
+  }
+  liveButtons();
+}
+
+$j(window).on('load', function() {
+  const live = document.getElementById('liveButton');
+  const boxes = document.getElementById('liveBoxesButton');
+  if (live) live.addEventListener('click', liveToggle);
+  if (boxes) boxes.addEventListener('click', liveBoxesToggle);
+  const cookie = getCookie('zmWatchShowBoxes' + monitorId);
+  zmLive.boxes = cookie ? (cookie == '1') : null;
+  liveButtons();
+});
+window.addEventListener('beforeunload', function() {
+  if (zmLive.on && zmLive.abort) zmLive.abort.abort();
+});
+
 // Kick everything off
 $j( window ).on("load", initPage);
 

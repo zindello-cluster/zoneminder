@@ -260,6 +260,16 @@ echo getNavBarHTML() ?>
         <button type="button" id="cycleToggle" class="btn <?php echo $showCycle ? 'btn-primary':'btn-secondary'?>" title="<?php echo translate('Toggle cycle sidebar')?>">
             <span class="material-icons md-18">view_carousel</span>
         </button>
+<?php
+  // zindello-cluster: Live, the camera's picture read frame by frame with its boxes, a second
+  // behind real time (docs/live-detection.md, "Live"); Boxes, the toggle.
+?>
+        <button type="button" id="liveButton" class="btn btn-secondary" title="<?php echo translate('Live: every frame with its boxes, one second behind') ?>">
+            <span class="material-icons md-18">sensors</span>
+        </button>
+        <button type="button" id="liveBoxesButton" class="btn btn-secondary" title="<?php echo translate('Boxes') ?>">
+            <span class="material-icons md-18">crop_free</span>
+        </button>
         <button type="button" id="ptzToggle" class="btn <?php echo $showPtzControls ? 'btn-primary':'btn-secondary'?>"
 <?php
     if ($monitor->Controllable() && canView('Control') && ($monitor->Type() != 'WebSite')) {
@@ -540,5 +550,7 @@ if ( canView('Events') && ($monitor->Type() != 'WebSite') ) {
   echo '<script type="module" src="js/video-stream.js"></script>'.PHP_EOL;
   echo '<script src="'.cache_bust('js/MonitorStream.js') .'"></script>'.PHP_EOL;
 
+  echo output_link_if_exists(array('css/base/detections.css'));  // zindello-cluster: live detection
+  echo output_script_if_exists(array('js/detections.js'));
   xhtmlFooter();
 ?>
