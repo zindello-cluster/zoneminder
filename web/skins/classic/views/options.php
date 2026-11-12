@@ -141,6 +141,8 @@ foreach (array_map('basename', glob('skins/'.$skin.'/css/*', GLOB_ONLYDIR)) as $
   include('_options_roles.php');
 } else if ($tab == 'API') {
   include('_options_api.php');
+} else if ($tab == 'detection') {  // zindello-cluster: live detection's settings per camera
+  include('_options_detection.php');
 }  // $tab == API
   else { 
   $config = array();

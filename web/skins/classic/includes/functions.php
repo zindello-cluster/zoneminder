@@ -998,6 +998,7 @@ function getOptionsHTML($forLeftBar = false) {
     $categoryDisplayOrder[] = 'dnsmasq';
   }
   $categoryDisplayOrder = array_merge($categoryDisplayOrder, [
+    'detection',  // zindello-cluster: live detection's settings per camera (views/_options_detection.php)
     'API',
     'servers',
     'storage',
