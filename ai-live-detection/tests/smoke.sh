@@ -62,7 +62,11 @@ token=$(docker exec zm-smoke curl -sf -X POST -d 'user=admin&pass=admin' http://
 auth=${token:+"&token=$token"}
 page() { docker exec zm-smoke curl -sf "http://127.0.0.1/zm/index.php?$1$auth"; }
 must() { # <what> <pattern> <page query>
-  if page "$3" | grep -q -- "$2"; then echo "ok: $1"; else echo "MISSING: $1 ($2 in ?$3)" >&2; page "$3" | head -c 2000 >&2; exit 1; fi
+  if page "$3" | grep -q -- "$2"; then echo "ok: $1"; return; fi
+  echo "MISSING: $1 ($2 in ?$3)" >&2
+  docker exec zm-smoke curl -s -w '\nHTTP %{http_code}\n' "http://127.0.0.1/zm/index.php?$3$auth" | tail -c 3000 >&2
+  docker exec zm-smoke sh -c 'tail -n 30 /var/log/apache2/error.log /var/log/zm/*.log 2>/dev/null' >&2 || true
+  exit 1
 }
 must "the event page's Boxes button" 'id="toggleBoxesButton"' 'view=event&eid=1'
 must "the event page loads the drawing layer" 'js/detections.js' 'view=event&eid=1'
