@@ -52,8 +52,8 @@ EOF
 sql zm <<'EOF'
 INSERT INTO Monitors (Id, Name, Type, Enabled, Width, Height, Colours, Path, Capturing, Analysing, Recording, Decoding)
   VALUES (1, 'Smoke camera', 'Ffmpeg', 1, 640, 480, 4, 'rtsp://127.0.0.1/none', 'Always', 'None', 'Always', 'Always');
-INSERT INTO Events (Id, MonitorId, StorageId, Name, StartDateTime, EndDateTime, Width, Height, Length, Frames, AlarmFrames, DefaultVideo, Videoed)
-  VALUES (1, 1, 1, 'Event 1', '2026-11-12 11:26:40', '2026-11-12 11:27:40', 640, 480, 60, 900, 0, '1-video.h264.mp4', 1);
+INSERT INTO Events (Id, MonitorId, StorageId, StateId, Name, StartDateTime, EndDateTime, Width, Height, Length, Frames, AlarmFrames, DefaultVideo, Videoed)
+  VALUES (1, 1, 1, 1, 'Event 1', '2026-11-12 11:26:40', '2026-11-12 11:27:40', 640, 480, 60, 900, 0, '1-video.h264.mp4', 1);
 EOF
 
 # Signed in as the fresh install's admin/admin, by token (the API's login), when sign-in is on.
