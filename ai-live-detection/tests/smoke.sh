@@ -82,7 +82,8 @@ must "the events list's Object filter" 'id="objectFilter"' 'view=events'
 must "the boxes request: the event's frames" '"frames":\[{"t":1794443200.2' 'view=request&request=detections&what=event&eid=1'
 must "the boxes request: the event's start" '"video_start":1794443200' 'view=request&request=detections&what=event&eid=1'
 must "the boxes request: live" '"interval":0.2' 'view=request&request=detections&what=live&mid=1&since=1794443200'
-must "the Object filter finds the event" '"Id":"1"' 'view=request&request=events&task=query&object=person'
-if page 'view=request&request=events&task=query&object=car' | grep -q '"Id":"1"'; then echo "the Object filter let a car through" >&2; exit 1; fi
+# The event's Id, as a number or a string, in the list's rows.
+must "the Object filter finds the event" '"Id":"\?1"\?[,}]' 'view=request&request=events&task=query&object=person'
+if page 'view=request&request=events&task=query&object=car' | grep -q '"Id":"\?1"\?[,}]'; then echo "the Object filter let a car through" >&2; exit 1; fi
 echo "ok: the Object filter keeps the event out for an object it hasn't got"
 echo "smoke test passed"
