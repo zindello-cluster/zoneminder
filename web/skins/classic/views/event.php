@@ -325,7 +325,11 @@ if (file_exists($Event->Path().'/objdetect.jpg')) {
 <?php
 if ($video_tag) {
 ?>
-                  <video id="videoobj" class="video-js"
+<?php
+  // zindello-cluster: playsinline, so an iPhone plays the recording in the page, under the boxes,
+  // rather than in its own full-screen player where nothing can be drawn over it.
+?>
+                  <video id="videoobj" class="video-js" playsinline webkit-playsinline
                    <?php echo $scale ? 'width="'.reScale($Event->Width(), $scale).'"' : '' ?>
                    <?php echo $scale ? 'height="'.reScale($Event->Height(), $scale).'"' : '' ?>
                     controls autoplay preload="auto"
