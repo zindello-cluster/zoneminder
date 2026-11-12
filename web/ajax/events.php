@@ -214,6 +214,15 @@ function queryRequest($filter, $search, $advsearch, $sort, $offset, $order, $lim
   $likes = array();
   // ZM\Error($filter->sql());
   $where = $filter->sql()?' WHERE ('.$filter->sql().')' : '';
+  // zindello-cluster: the Object filter (docs/live-detection.md, "Search"): only events with
+  // that object in live detection's per-event summaries; "animal" is any of COCO's ten.
+  if (!empty($_REQUEST['object'])) {
+    $object = $_REQUEST['object'];
+    $animals = array('bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe');
+    $labels = ($object == 'animal') ? $animals : array($object);
+    $in = implode(',', array_map('dbEscape', $labels));
+    $where .= ($where ? ' AND ' : ' WHERE ').'E.Id IN (SELECT event_id FROM `detector`.detector_events WHERE label IN ('.$in.'))';
+  }
   $has_post_sql_conditions = count($filter->post_sql_conditions());
 
 

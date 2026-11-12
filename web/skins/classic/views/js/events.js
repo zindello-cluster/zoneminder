@@ -589,7 +589,7 @@ function initDatepickerEventsPage() {
 // Build filterQuery string from current form field values
 function buildFilterQuery() {
   var query = '';
-  $j('#fieldsTable input, #fieldsTable select').each(function() {
+  $j('#fieldsTable input, #fieldsTable select, #objectFilter').each(function() {  // zindello-cluster: the Object filter
     const el = $j(this);
     query += '&' + encodeURIComponent(el.attr('name')) + '=' + encodeURIComponent(el.val());
   });
@@ -633,4 +633,5 @@ function totalDiskSpaceFormatter(data) {
 
 $j(document).ready(function() {
   initPage();
+  $j('#objectFilter').on('change', filterEvents);  // zindello-cluster: the Object filter
 });

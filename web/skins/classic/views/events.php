@@ -103,6 +103,18 @@ echo getNavBarHTML();
     } else {
       echo $filter->widget();
     }
+    // zindello-cluster: the Object filter, one label or any, from live detection's per-event
+    // summaries (docs/live-detection.md, "Search"). The ten animals are offered as one, "animal".
+    $objectLabels = array();
+    foreach (dbFetchAll('SELECT DISTINCT label FROM `detector`.detector_events ORDER BY label') as $row) {
+      $l = $row['label'];
+      if (in_array($l, array('bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe'), true)) $l = 'animal';
+      $objectLabels[$l] = $l;
+    }
+    $objectSelected = isset($_REQUEST['object']) ? validHtmlStr($_REQUEST['object']) : '';
+    echo '<span class="term" id="objectFilterTerm"><label for="objectFilter">'.translate('Object').'</label> ';
+    echo htmlSelect('object', array_merge(array('' => translate('Any object')), $objectLabels), $objectSelected, array('id' => 'objectFilter', 'class' => 'chosen'));
+    echo '</span>';
   ?>
 
           </div> <!-- .col-sm-9-->
