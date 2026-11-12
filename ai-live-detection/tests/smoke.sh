@@ -71,7 +71,8 @@ must() { # <what> <pattern> <page query>
   exit 1
 }
 must "the event page's Boxes button" 'id="toggleBoxesButton"' 'view=event&eid=1'
-must "the event page loads the drawing layer" 'js/detections.js' 'view=event&eid=1'
+# cache_bust() serves it as cache/skins_classic_js_detections-<css>-<mtime>.js, or by its own path.
+must "the event page loads the drawing layer" 'js_detections-\|js/detections\.js' 'view=event&eid=1'
 must "the camera page's Live button" 'id="liveButton"' 'view=watch&mid=1'
 must "the camera page's Boxes button" 'id="liveBoxesButton"' 'view=watch&mid=1'
 must "the Detection tab" 'id="detectionTable"' 'view=options&tab=detection'
