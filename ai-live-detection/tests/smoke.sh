@@ -54,6 +54,8 @@ INSERT INTO Monitors (Id, Name, Type, Enabled, Width, Height, Colours, Path, Cap
   VALUES (1, 'Smoke camera', 'Ffmpeg', 1, 640, 480, 4, 'rtsp://127.0.0.1/none', 'Always', 'None', 'Always', 'Always');
 INSERT INTO Events (Id, MonitorId, StorageId, StateId, Name, StartDateTime, EndDateTime, Width, Height, Length, Frames, AlarmFrames, DefaultVideo, Videoed)
   VALUES (1, 1, 1, 1, 'Event 1', '2026-11-12 11:26:40', '2026-11-12 11:27:40', 640, 480, 60, 900, 0, '1-video.h264.mp4', 1);
+-- A fresh install sends every page to the privacy notice until it's answered (index.php).
+UPDATE Config SET Value = '0' WHERE Name = 'ZM_SHOW_PRIVACY';
 EOF
 
 # Signed in as the fresh install's admin/admin, by token (the API's login), when sign-in is on.
@@ -64,7 +66,7 @@ page() { docker exec zm-smoke curl -sf "http://127.0.0.1/zm/index.php?$1$auth"; 
 must() { # <what> <pattern> <page query>
   if page "$3" | grep -q -- "$2"; then echo "ok: $1"; return; fi
   echo "MISSING: $1 ($2 in ?$3)" >&2
-  docker exec zm-smoke curl -s -w '\nHTTP %{http_code}\n' "http://127.0.0.1/zm/index.php?$3$auth" | tail -c 3000 >&2
+  docker exec zm-smoke curl -s -w '\nHTTP %{http_code} %{redirect_url}\n' "http://127.0.0.1/zm/index.php?$3$auth" | tail -c 3000 >&2
   docker exec zm-smoke sh -c 'tail -n 30 /var/log/apache2/error.log /var/log/zm/*.log 2>/dev/null' >&2 || true
   exit 1
 }
