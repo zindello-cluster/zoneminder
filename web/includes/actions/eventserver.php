@@ -2,10 +2,13 @@
 //
 // zindello-cluster: the Event Server page's actions: Save, Back to the default, and Remove a phone
 // (external-security.zindello.com.au/docs/alert-rules.md, "The page"). The rules and the permission
-// checks are includes/alert_rules.php, shared with the API. Like every action, this runs only on a
-// POST that has passed ZoneMinder's CSRF check (index.php). What happened is left in
-// $eventserver_message (done) or $eventserver_error (refused) for the view, which escapes them.
+// checks are includes/alert_rules.php, shared with the API. Only a POST does anything here:
+// ZoneMinder's CSRF check (index.php) is on POSTs, and an action named in a link is a GET. What
+// happened is left in $eventserver_message (done) or $eventserver_error (refused) for the view,
+// which escapes them.
 //
+
+if ($_SERVER['REQUEST_METHOD'] != 'POST') return;
 
 require_once('includes/alert_rules.php');
 

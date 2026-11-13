@@ -316,6 +316,12 @@ has "the page says back to the default" 'Back to the default.' "$page"
 is "Back to the default deletes the rows" '' "$(rules "$viewer")"
 is "Back to the default deletes the switch" '' "$(switch "$viewer")"
 apiis "viewer sets one again" 200 "$vtok" PUT "alert_rules/$viewer.json" $json '{"alerts": false, "cameras": {"1": {"labels": ["person"]}}}'
+# Only a POST with the page's CSRF token changes anything: not a link, and not a form from elsewhere.
+upage viewer "view=eventserver&action=reset&uid=$viewer" >/dev/null
+is "a link with an action in it changes nothing" '1:1:["person"]' "$(rules "$viewer")"
+docker exec "$name" curl -s -o /dev/null -c /tmp/viewer.jar -b /tmp/viewer.jar -d "view=eventserver&uid=$viewer&action=reset" \
+  "http://127.0.0.1/zm/index.php?view=eventserver"
+is "a post without the page's CSRF token changes nothing" '1:1:["person"]' "$(rules "$viewer")"
 apiis "admin's reset of viewer's" 200 "$atok" PUT "alert_rules/$viewer.json" $json '{"reset": true}'
 is "reset deletes the rows" '' "$(rules "$viewer")"
 is "reset deletes the switch" '' "$(switch "$viewer")"
