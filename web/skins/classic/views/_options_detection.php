@@ -5,7 +5,9 @@
 // 12 November 2026: "What types is yolo looking for? Some config option on the UI for this would be
 // good.", cluster-docs O365). One row per camera: Live on/off, what to look for (COCO's 80 types,
 // the common ones first and the rest under More; the ten animals as one tick, "animal"), the
-// confidence, the frames a second, and whether boxes start shown. Saved straight to
+// confidence, the frames a second, whether boxes start shown, and which objects may raise an alarm
+// (alarm_on; the owner, 13 November 2026: "Stationary Objects should not trigger an alert ... make
+// that an option to enable/disable on a per-camera basis"). Saved straight to
 // detector.detector_settings; the live sidecar reads it within 10 seconds. Seen by whoever may view
 // System settings, edited by whoever may edit them, as every other tab.
 //
@@ -28,6 +30,17 @@ $more = array('airplane', 'train', 'traffic light', 'fire hydrant', 'stop sign',
   'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'book',
   'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush');
 $all = array_merge($common, $animals, $more);
+// Which objects may raise a camera's alarm, as the live sidecar reads detector_settings.alarm_on.
+$alarmChoices = array(
+  'moving' => 'Moving objects only',
+  'moving_and_people' => 'Moving objects, and people even when still',
+  'all' => 'Everything',
+);
+$alarmDefault = 'moving_and_people';
+// A detector table from before the column (the chart's seed adds it at ZoneMinder's next start):
+// shown, not saved.
+$hasAlarmOn = intval(dbFetchOne('SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema=? '.
+  "AND table_name='detector_settings' AND column_name='alarm_on'", 'n', array(ZM_DETECTION_DB))) > 0;
 
 $message = '';
 if ($canEdit and isset($_POST['detectionSave']) and isset($_POST['camera']) and is_array($_POST['camera'])) {
@@ -50,10 +63,18 @@ if ($canEdit and isset($_POST['detectionSave']) and isset($_POST['camera']) and 
     $per_second = max(1, min(10, $per_second));
     $live = !empty($row['live']) ? 1 : 0;
     $boxes = !empty($row['boxes']) ? 1 : 0;
-    dbQuery('INSERT INTO `'.ZM_DETECTION_DB.'`.detector_settings (monitor_id, labels, min_confidence, per_second, live, boxes_default) '.
-      'VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE labels=VALUES(labels), min_confidence=VALUES(min_confidence), '.
-      'per_second=VALUES(per_second), live=VALUES(live), boxes_default=VALUES(boxes_default)',
-      array($mid, json_encode($labels), $confidence, $per_second, $live, $boxes));
+    $alarmOn = (isset($row['alarm_on']) and is_string($row['alarm_on']) and isset($alarmChoices[$row['alarm_on']])) ? $row['alarm_on'] : $alarmDefault;
+    if ($hasAlarmOn) {
+      dbQuery('INSERT INTO `'.ZM_DETECTION_DB.'`.detector_settings (monitor_id, labels, min_confidence, per_second, live, boxes_default, alarm_on) '.
+        'VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE labels=VALUES(labels), min_confidence=VALUES(min_confidence), '.
+        'per_second=VALUES(per_second), live=VALUES(live), boxes_default=VALUES(boxes_default), alarm_on=VALUES(alarm_on)',
+        array($mid, json_encode($labels), $confidence, $per_second, $live, $boxes, $alarmOn));
+    } else {
+      dbQuery('INSERT INTO `'.ZM_DETECTION_DB.'`.detector_settings (monitor_id, labels, min_confidence, per_second, live, boxes_default) '.
+        'VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE labels=VALUES(labels), min_confidence=VALUES(min_confidence), '.
+        'per_second=VALUES(per_second), live=VALUES(live), boxes_default=VALUES(boxes_default)',
+        array($mid, json_encode($labels), $confidence, $per_second, $live, $boxes));
+    }
   }
   $message = translate('Saved. The detector picks it up within 10 seconds.');
 }
@@ -88,7 +109,7 @@ function detection_label_shown($labels) {
   <input type="hidden" name="view" value="options"/>
   <input type="hidden" name="tab" value="detection"/>
 <?php if ($message) echo '<span class="timedSuccessBox">'.$message.'</span>'; ?>
-  <p class="form-text"><?php echo translate('What YOLO looks for on each camera, all the time, from the frames ZoneMinder has decoded. What it finds raises the alarms and is drawn as boxes over the picture, live and on recordings. A camera with Live off is still recorded; it just raises no alarms and has no boxes.') ?></p>
+  <p class="form-text"><?php echo translate('What YOLO looks for on each camera, all the time, from the frames ZoneMinder has decoded. What it finds raises the alarms and is drawn as boxes over the picture, live and on recordings. A camera with Live off is still recorded; it just raises no alarms and has no boxes. Alarms on says whether something that hasn\'t moved, a parked car say, may raise an alarm.') ?></p>
   <table id="detectionTable" class="table table-sm table-striped">
     <thead>
       <tr>
@@ -98,6 +119,7 @@ function detection_label_shown($labels) {
         <th><?php echo translate('Confidence') ?></th>
         <th><?php echo translate('Frames a second') ?></th>
         <th><?php echo translate('Boxes shown') ?></th>
+        <th><?php echo translate('Alarms on') ?></th>
       </tr>
     </thead>
     <tbody>
@@ -135,6 +157,17 @@ foreach ($monitors as $m) {
         <td><input type="number" name="<?php echo $name ?>[confidence]" min="0.30" max="0.95" step="0.05" value="<?php echo $s ? number_format(floatval($s['min_confidence']), 2, '.', '') : '0.60' ?>" style="width: 5em"<?php echo $disabled ?>/></td>
         <td><input type="number" name="<?php echo $name ?>[per_second]" min="1" max="10" step="1" value="<?php echo $s ? intval($s['per_second']) : 5 ?>" style="width: 4em"<?php echo $disabled ?>/></td>
         <td><input type="checkbox" name="<?php echo $name ?>[boxes]" value="1"<?php echo ($s and $s['boxes_default']) ? ' checked="checked"' : '' ?><?php echo $disabled ?>/></td>
+        <td>
+<?php
+  $alarmOn = ($s and isset($s['alarm_on']) and isset($alarmChoices[$s['alarm_on']])) ? $s['alarm_on'] : $alarmDefault;
+  echo '<select name="'.$name.'[alarm_on]"'.($hasAlarmOn ? $disabled : ' disabled="disabled"').'>';
+  foreach ($alarmChoices as $value => $words) {
+    echo '<option value="'.$value.'"'.($value == $alarmOn ? ' selected="selected"' : '').'>'.validHtmlStr(translate($words)).'</option>';
+  }
+  echo '</select>';
+  if (!$hasAlarmOn) echo '<br/><span class="text-muted">'.translate('Can be changed after ZoneMinder\'s next start.').'</span>';
+?>
+        </td>
       </tr>
 <?php
 } // end foreach monitor

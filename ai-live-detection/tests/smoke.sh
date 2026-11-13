@@ -38,13 +38,14 @@ docker exec zm-smoke curl -sf -o /dev/null http://127.0.0.1/zm/ || { docker logs
 sql detector <<'EOF'
 CREATE TABLE detector_settings (monitor_id INT UNSIGNED NOT NULL PRIMARY KEY, labels JSON NOT NULL, min_confidence DECIMAL(3,2) NOT NULL,
   per_second TINYINT UNSIGNED NOT NULL, live BOOLEAN NOT NULL, boxes_default BOOLEAN NOT NULL,
+  alarm_on ENUM('moving','moving_and_people','all') NOT NULL DEFAULT 'moving_and_people',
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB;
 CREATE TABLE detector_frames (monitor_id INT UNSIGNED NOT NULL, frame_time DATETIME(6) NOT NULL, frame_number INT UNSIGNED NOT NULL,
   boxes JSON NOT NULL, PRIMARY KEY (monitor_id, frame_time)) ENGINE=InnoDB;
 CREATE TABLE detector_events (event_id BIGINT UNSIGNED NOT NULL, label VARCHAR(32) NOT NULL, monitor_id INT UNSIGNED NOT NULL,
   video_start DATETIME(6) NOT NULL, first_seen DATETIME(6) NOT NULL, last_seen DATETIME(6) NOT NULL, frames INT UNSIGNED NOT NULL,
   best_confidence DECIMAL(3,2) NOT NULL, PRIMARY KEY (event_id, label), KEY by_label (label, first_seen), KEY by_camera (monitor_id, first_seen)) ENGINE=InnoDB;
-INSERT INTO detector_settings VALUES (1, '["person","car"]', 0.60, 5, 1, 1, NOW());
+INSERT INTO detector_settings (monitor_id, labels, min_confidence, per_second, live, boxes_default) VALUES (1, '["person","car"]', 0.60, 5, 1, 1);
 INSERT INTO detector_frames VALUES (1, '2026-11-12 00:26:40.200000', 10, '[{"label":"person","confidence":0.87,"box":[0.1,0.1,0.3,0.6],"track":1}]'),
   (1, '2026-11-12 00:26:40.400000', 13, '[{"label":"person","confidence":0.9,"box":[0.12,0.1,0.32,0.6],"track":1}]');
 INSERT INTO detector_events VALUES (1, 'person', 1, '2026-11-12 00:26:40.000000', '2026-11-12 00:26:40.200000', '2026-11-12 00:26:40.400000', 2, 0.90);
@@ -78,6 +79,8 @@ must "the camera page's Boxes button" 'id="liveBoxesButton"' 'view=watch&mid=1'
 must "the Detection tab" 'id="detectionTable"' 'view=options&tab=detection'
 must "the Detection tab's camera row" 'Smoke camera' 'view=options&tab=detection'
 must "the Detection tab in the Options menu" 'tab=detection' 'view=options&tab=system'
+must "the Detection tab's Alarms on choice" 'name="camera\[1\]\[alarm_on\]"' 'view=options&tab=detection'
+must "the Detection tab's Alarms on default" 'value="moving_and_people" selected="selected">Moving objects, and people even when still' 'view=options&tab=detection'
 must "the events list's Object filter" 'id="objectFilter"' 'view=events'
 must "the boxes request: the event's frames" '"frames":\[{"t":1794443200.2' 'view=request&request=detections&what=event&eid=1'
 must "the boxes request: the event's start" '"video_start":1794443200' 'view=request&request=detections&what=event&eid=1'
@@ -86,4 +89,9 @@ must "the boxes request: live" '"interval":0.2' 'view=request&request=detections
 must "the Object filter finds the event" '"Id":"\?1"\?[,}]' 'view=request&request=events&task=query&object=person'
 if page 'view=request&request=events&task=query&object=car' | grep -q '"Id":"\?1"\?[,}]'; then echo "the Object filter let a car through" >&2; exit 1; fi
 echo "ok: the Object filter keeps the event out for an object it hasn't got"
+# A detector table from before alarm_on (the chart's seed adds it at ZoneMinder's next start): the
+# tab still shows, the choice greyed out.
+sql detector -e "ALTER TABLE detector_settings DROP COLUMN alarm_on"
+must "the Detection tab on a table without alarm_on" 'Smoke camera' 'view=options&tab=detection'
+must "the Alarms on choice greyed out until the column is there" "Can be changed after ZoneMinder's next start" 'view=options&tab=detection'
 echo "smoke test passed"

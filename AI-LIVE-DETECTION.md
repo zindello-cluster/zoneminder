@@ -19,7 +19,7 @@ Every change is marked `zindello-cluster` in a comment where it sits.
 3. **Live with boxes on the camera page:** a Live button and a Boxes toggle (`views/watch.php`,
    `views/js/watch.js`).
 4. **The Detection tab in Options,** per camera: live on or off, what to look for, the confidence,
-   the frames a second, boxes shown (`views/options.php`, `views/_options_detection.php`, the tab
+   the frames a second, boxes shown, which objects may raise an alarm (`views/options.php`, `views/_options_detection.php`, the tab
    list in `includes/functions.php`).
 5. **The Object filter on the events list** (`views/events.php`, `views/js/events.js`,
    `ajax/events.php`).
