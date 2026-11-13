@@ -209,6 +209,7 @@ function buildSidebarMenu() {
     getEventsHTML($view, $forLeftBar = true) .
     getOptionsHTML($forLeftBar = true) .
     getLogHTML($forLeftBar = true) .
+    getEventServerHTML($forLeftBar = true) .  // zindello-cluster: alert rules (views/eventserver.php)
     getDevicesHTML($forLeftBar = true) .
     getGroupsHTML($view, $forLeftBar = true) .
     getFilterHTML($view, $forLeftBar = true) .
@@ -510,6 +511,7 @@ function getNormalNavBarHTML($running, $user, $bandwidth_options, $view, $skin) 
           echo getConsoleHTML();
           echo getOptionsHTML();
           echo getLogHTML();
+          echo getEventServerHTML();  // zindello-cluster: alert rules (views/eventserver.php)
           echo getDevicesHTML();
           echo getGroupsHTML($view);
           echo getFilterHTML($view);
@@ -668,6 +670,7 @@ function getCollapsedNavBarHTML($running, $user, $bandwidth_options, $view, $ski
             echo getConsoleHTML();
             echo getOptionsHTML();
             echo getLogHTML();
+            echo getEventServerHTML();  // zindello-cluster: alert rules (views/eventserver.php)
             echo getDevicesHTML();
             echo getGroupsHTML($view);
             echo getFilterHTML($view);
@@ -1092,6 +1095,33 @@ function getLogHTML($forLeftBar = false) {
     }
   }
   
+  return $result;
+}
+
+// zindello-cluster: the Event Server menu item, alert rules per user, per camera, per type
+// (views/eventserver.php), for every signed-in user: each sees and sets their own.
+function getEventServerHTML($forLeftBar = false) {
+  global $user;
+  $result = '';
+
+  if (ZM_OPT_USE_AUTH and $user and $user->Id()) {
+    if ($forLeftBar) {
+      $result .= buildMenuItem(
+        $viewItemName = 'eventserver',
+        $id = 'getEventServerHTML',
+        $itemName = 'Event Server',
+        $href = '?view=eventserver',
+        $icon = 'notifications',
+        $classNameForTag_A = '',
+        $subMenu = ''
+      );
+    } else {
+      global $view;
+      $class = $view == 'eventserver' ? ' selected' : '';
+      $result .= '<li id="getEventServerHTML" class="nav-item"><a class="nav-link'.$class.'" href="?view=eventserver">'.translate('Event Server').'</a></li>'.PHP_EOL;
+    }
+  }
+
   return $result;
 }
 

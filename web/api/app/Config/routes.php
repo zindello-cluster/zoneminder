@@ -45,6 +45,10 @@
 	Router::mapResources('user_preference');
 	Router::mapResources('zonepresets');
 	Router::mapResources('zones');
+	// zindello-cluster: alert rules (Controller/AlertRulesController.php); a phone by its token_hash
+	Router::connect('/alert_rules/phone/:id', array('controller' => 'alert_rules', 'action' => 'remove_phone', '[method]' => 'DELETE'),
+		array('id' => '[0-9a-fA-F]{64}', 'pass' => array('id')));
+	Router::mapResources('alert_rules');
 
 	Router::parseExtensions();
 
