@@ -71,6 +71,18 @@ Every change is marked `zindello-cluster` in a comment where it sits.
     it, one at a time, on the M4000, which leaves `out.mp4` there. The status says it's waiting
     until the exporter has started it (`ajax/cameratimeline.php`).
 
+12. **The Camera tab** (cluster-docs `docs/zoneminder-camera-tab.md`; O508-O511): on the page of
+    each camera the chart's camera setup sets (its settings file, `/opt/camsetup/config.json`), to
+    whoever may view System settings, after MQTT: the VIGI's own Fill Light Settings, Day/Night,
+    Picture and on-screen text, read from the camera when the tab opens and changed all at once on
+    Save by whoever may edit System settings, then read back and logged in ZoneMinder's Log;
+    camera setup's own settings shown read only; ZoneMinder's live picture of the camera beside
+    them, with a Snapshot to compare with. Through the camera's web API with the monitor's own
+    login, one login per action, never retried after a refusal (`includes/vigi.php`,
+    `ajax/camerasettings.php`, `views/_monitor_camera.php`, `js/camerasettings.js`,
+    `css/base/camerasettings.css`; the tab in `views/monitor.php`). Its smoke test talks to a fake
+    VIGI (`tests/fake_vigi.py`).
+
 `git log $(cat ai-live-detection/UPSTREAM_RELEASE)..ai-live-detection -- web` lists them.
 
 ## The branches
