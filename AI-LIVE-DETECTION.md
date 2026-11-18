@@ -37,6 +37,16 @@ Every change is marked `zindello-cluster` in a comment where it sits.
    /api/alert_rules/phone/<token_hash>.json` (`web/api/app/Controller/AlertRulesController.php`, two
    routes in `web/api/app/Config/routes.php`).
 
+8. **Events are each user's alerts** (cluster-docs `docs/zoneminder-ui.md`, section 1; O487–O498):
+   the events list (`ajax/events.php`, `views/events.php`, `views/js/events.js`) and the API's
+   events index (`web/api/app/Controller/EventsController.php`) list the signed-in user's alerts:
+   events the event server tagged (as the user `ZM_ALERTS_TAGGER`, `notify` unless set) with a type
+   that user has switched on for that camera now, from `ZM_ALERTS_SINCE` (else live detection's
+   first alarm row). Show: Alerts / All Events on the list; `show=all` in the API, taken out of the
+   request before ZoneMinder builds its filter. The test is `web/includes/alerts_list.php`.
+   `consoleEvents` and `search` are unchanged. The console's event count columns are dropped
+   (`views/console.php`), and Montage Review asks the API for every event (`views/js/montagereview.js`).
+
 `git log $(cat ai-live-detection/UPSTREAM_RELEASE)..ai-live-detection -- web` lists them.
 
 ## The branches
@@ -60,7 +70,10 @@ release, so a base image that changed them fails the build rather than being ove
 MariaDB and checks each page we change for our parts (`tests/smoke.sh`), then, with sign-in on, an
 admin and a user who may view one of two cameras, the Event Server page and the alert rules API:
 each sees and sets only their own, the admin another's only with the tick, Back to the default,
-Remove, and bad input refused. A pull request into the
+Remove, and bad input refused. Then the Alerts list: each user's own alerts in the list and the API,
+All Events and `show=all`, the rules now, a hand-added tag and the old hook's not counting, and
+zmNinjaNG 2.8.0's own calls replayed (its list, timeline, tag filter, badges, next and previous,
+opening an event by id as a push does): each answers 200 with the app's keys, only fewer events. A pull request into the
 branch runs the same, without pushing.
 
 The digest is in the run's summary. `external-security.zindello.com.au` pins it; a pull request

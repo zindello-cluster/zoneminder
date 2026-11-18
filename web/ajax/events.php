@@ -223,6 +223,14 @@ function queryRequest($filter, $search, $advsearch, $sort, $offset, $order, $lim
     $in = implode(',', array_map('dbEscape', $labels));
     $where .= ($where ? ' AND ' : ' WHERE ').'E.Id IN (SELECT event_id FROM `detector`.detector_events WHERE label IN ('.$in.'))';
   }
+  // zindello-cluster: Show: Alerts (the default) or All Events (show=all): the signed-in user's
+  // alerts, from the event server's tags against their rules now (includes/alerts_list.php;
+  // cluster-docs docs/zoneminder-ui.md, O487-O498).
+  require_once('includes/alerts_list.php');
+  if (alerts_list_wanted(isset($_REQUEST['show']) ? $_REQUEST['show'] : null)) {
+    $alerts = alerts_list_condition('E');
+    if ($alerts !== null) $where .= ($where ? ' AND ' : ' WHERE ').$alerts;
+  }
   $has_post_sql_conditions = count($filter->post_sql_conditions());
 
 

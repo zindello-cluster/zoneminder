@@ -276,7 +276,10 @@ echo $navbar ?>
             <th data-sortable="true" data-field="Storage" class="colStorage"><?php echo translate('Storage') ?></th>
 <?php }
 
-  foreach ( array_keys($eventCounts) as $i ) {
+  // zindello-cluster: the event count columns dropped (the owner: "Drop them"; cluster-docs
+  // docs/zoneminder-ui.md, O491). The Events list is each user's alerts now, which these counts of
+  // every event wouldn't match.
+  foreach ( array() as $i ) {
       $filter = addFilterTerm(
         $eventCounts[$i]['filter'],
         count($eventCounts[$i]['filter']['Query']['terms']),

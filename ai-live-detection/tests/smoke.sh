@@ -388,4 +388,149 @@ code=$(docker exec "$name" curl -s -o /dev/null -w '%{http_code}' http://127.0.0
 is "the API signed out" 401 "$code"
 has "the page signed out goes to the login" 'view=login' "$(docker exec "$name" curl -s -o /dev/null -w '%{redirect_url}' 'http://127.0.0.1/zm/index.php?view=eventserver')"
 
+# ---- The Alerts list (cluster-docs docs/zoneminder-ui.md, section 1; O487-O498): each signed-in
+# user's alerts from the event server's tags against their rules now; show=all for every event.
+# Then zmNinjaNG 2.8.0's own calls (app/src/api/events.ts at zmNinjaNg-2.8.0), replayed as the app
+# makes them: each answers as before, same keys, only fewer events (O492).
+command -v jq >/dev/null || fail "jq is needed for the API checks"
+q "INSERT INTO Users (Username, Password, Enabled, Stream, Events, Control, Monitors, \`Groups\`, Devices, Snapshots, System, APIEnabled)
+   VALUES ('notify', '', 1, 'View', 'View', 'None', 'View', 'None', 'None', 'None', 'None', 1)"
+notify=$(q "SELECT Id FROM Users WHERE Username='notify'")
+# Events on 18 November 2026, Sydney time; live detection's first alarm row at 17:38:48.
+sql zm <<EOF2
+INSERT INTO Events (Id, MonitorId, StorageId, StateId, Name, Cause, StartDateTime, EndDateTime, Width, Height, Length, Frames, AlarmFrames, DefaultVideo, Videoed) VALUES
+ (101, 1, 1, 1, 'Event 101', 'Detected',   '2026-11-18 18:00:00', '2026-11-18 18:01:00', 640, 480, 60, 900, 90, '', 0),
+ (102, 1, 1, 1, 'Event 102', 'Continuous', '2026-11-18 18:05:00', '2026-11-18 18:06:00', 640, 480, 60, 900, 10, '', 0),
+ (103, 1, 1, 1, 'Event 103', 'Continuous', '2026-11-18 18:10:00', '2026-11-18 18:11:00', 640, 480, 60, 900, 0, '', 0),
+ (104, 1, 1, 1, 'Event 104', 'Continuous', '2026-11-18 18:15:00', '2026-11-18 18:16:00', 640, 480, 60, 900, 0, '', 0),
+ (105, 1, 1, 1, 'Event 105', 'Continuous', '2026-11-17 12:00:00', '2026-11-17 12:01:00', 640, 480, 60, 900, 30, '', 0),
+ (106, 2, 1, 1, 'Event 106', 'Detected',   '2026-11-18 18:20:00', '2026-11-18 18:21:00', 640, 480, 60, 900, 90, '', 0),
+ (107, 1, 1, 1, 'Event 107', 'Continuous', '2026-11-18 18:25:00', '2026-11-18 18:26:00', 640, 480, 60, 900, 40, '', 0),
+ (108, 1, 1, 1, 'Event 108', 'Continuous', '2026-11-18 10:00:00', '2026-11-18 10:01:00', 640, 480, 60, 900, 40, '', 0);
+INSERT INTO Tags (Name, CreatedBy) VALUES ('person', $notify), ('car', $notify), ('motorbike', $notify);
+-- The event server's tags (as notify): 101 person, 102 car, 105 person (before the change), 106
+-- person (camera 2), 107 motorbike, 108 person (that morning, before the change); 104 person by
+-- hand (admin).
+INSERT INTO Events_Tags (TagId, EventId, AssignedBy) SELECT Id, 101, $notify FROM Tags WHERE Name='person';
+INSERT INTO Events_Tags (TagId, EventId, AssignedBy) SELECT Id, 102, $notify FROM Tags WHERE Name='car';
+INSERT INTO Events_Tags (TagId, EventId, AssignedBy) SELECT Id, 105, $notify FROM Tags WHERE Name='person';
+INSERT INTO Events_Tags (TagId, EventId, AssignedBy) SELECT Id, 106, $notify FROM Tags WHERE Name='person';
+INSERT INTO Events_Tags (TagId, EventId, AssignedBy) SELECT Id, 107, $notify FROM Tags WHERE Name='motorbike';
+INSERT INTO Events_Tags (TagId, EventId, AssignedBy) SELECT Id, 108, $notify FROM Tags WHERE Name='person';
+INSERT INTO Events_Tags (TagId, EventId, AssignedBy) SELECT Id, 104, $admin FROM Tags WHERE Name='person';
+EOF2
+sql detector <<'EOF2'
+CREATE TABLE IF NOT EXISTS detector_alarms (monitor_id INT UNSIGNED NOT NULL, raised_at DATETIME(6) NOT NULL, label VARCHAR(32) NOT NULL,
+  first_seen DATETIME(6) NOT NULL, last_seen DATETIME(6) NOT NULL, best_confidence DECIMAL(3,2) NOT NULL, raised BOOLEAN NOT NULL,
+  picture VARCHAR(128) NULL, PRIMARY KEY (monitor_id, raised_at, label), KEY by_last_seen (monitor_id, last_seen)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO detector_alarms VALUES (1, '2026-11-18 06:38:48.513541', 'person', '2026-11-18 06:38:48.513541', '2026-11-18 06:38:50', 0.8, 1, NULL),
+  (2, '2026-11-18 07:10:00', 'person', '2026-11-18 07:10:00', '2026-11-18 07:10:05', 0.8, 1, NULL);
+-- The rules: the default a person; viewer's own row for camera 1, person and motorcycle; admin none.
+DELETE FROM alert_rules WHERE user_id <> 0;
+DELETE FROM alert_users;
+REPLACE INTO alert_rules (user_id, monitor_id, alerts, labels) VALUES (0, 0, 1, '["person"]');
+EOF2
+q "INSERT INTO detector.alert_rules (user_id, monitor_id, alerts, labels) VALUES ($viewer, 1, 1, '[\"person\",\"motorcycle\"]')"
+person=$(q "SELECT Id FROM Tags WHERE Name='person'")
+
+listids() { printf '%s' "$1" | jq -r '[.rows[].Id|tostring]|sort_by(tonumber)|join(",")'; }
+# The API exactly as the app calls it: its path, then its query string and the token.
+napi() { # <token> <path?query>
+  case "$2" in *\?*) u="$2&token=$1" ;; *) u="$2?token=$1" ;; esac
+  code=$(docker exec "$name" curl -s -o /tmp/api.out -w '%{http_code}' "http://127.0.0.1/zm/api/$u")
+  body=$(docker exec "$name" cat /tmp/api.out)
+}
+apiids() { printf '%s' "$body" | jq -r '[.events[].Event.Id|tostring]|sort_by(tonumber)|join(",")'; }
+shape='(.events|type=="array") and (.pagination|has("page") and has("current") and has("count") and has("prevPage") and has("nextPage") and has("limit") and has("pageCount"))'
+# <what> <path?query> <the user's alerts> <every event>: both answer 200 with the app's keys, the
+# alerts and every event as expected, and an event has the same fields either way.
+replay() {
+  napi "$vtok" "$2"
+  is "$1: 200" 200 "$code"
+  printf '%s' "$body" | jq -e "$shape" >/dev/null || { printf '%s\n' "$body" | tail -c 1500 >&2; fail "$1: the app's keys"; }
+  is "$1: viewer's alerts" "$3" "$(apiids)"
+  keys=$(printf '%s' "$body" | jq -c '[.events[0].Event // {} | keys[]]')
+  case "$2" in *\?*) all="$2&show=all" ;; *) all="$2?show=all" ;; esac
+  napi "$vtok" "$all"
+  is "$1, show=all: 200" 200 "$code"
+  printf '%s' "$body" | jq -e "$shape" >/dev/null || fail "$1, show=all: the app's keys"
+  is "$1, show=all: every event" "$4" "$(apiids)"
+  if [ "$keys" != '[]' ]; then is "$1: an event's fields as with show=all" "$(printf '%s' "$body" | jq -c '[.events[0].Event | keys[]]')" "$keys"; fi
+}
+
+# The web list, as each user.
+is "the list: viewer's alerts (own row: person, motorcycle; motorbike counts; not a hand-added tag; not before the change)" \
+  "101,107" "$(listids "$(upage viewer 'view=request&request=events&task=query')")"
+is "the list: admin's alerts (the default, a person; both cameras)" "101,106" "$(listids "$(upage admin 'view=request&request=events&task=query')")"
+is "the list, All Events: viewer's" "1,101,102,103,104,105,107,108" "$(listids "$(upage viewer 'view=request&request=events&task=query&show=all')")"
+is "the list, All Events: admin's" "1,101,102,103,104,105,106,107,108" "$(listids "$(upage admin 'view=request&request=events&task=query&show=all')")"
+page=$(upage viewer 'view=events')
+has "the events page's Show choice" 'id="showFilterTerm"' "$page"
+has "Alerts chosen by default" 'id="showAlerts" data-show="alerts" class="btn btn-primary active"' "$page"
+has "All Events offered" '>All Events</button>' "$page"
+has "All Events chosen from the address" 'id="showAll" data-show="all" class="btn btn-primary active"' "$(upage viewer 'view=events&show=all')"
+
+# zmNinjaNG 2.8.0's calls (encodeURIComponent'd segments, as getEvents, getMonitorEventsSince and
+# getAdjacentEvent build them).
+d0='2026-11-18%2000%3A00%3A00'; d1='2026-11-18%2023%3A59%3A59'
+replay "the app's Events list (no filters)" 'events/index.json?page=1&limit=100&sort=StartDateTime&direction=desc' \
+  "101,107" "1,101,102,103,104,105,107,108"
+replay "the app's Events list (camera, dates)" "events/index/MonitorId%3A1/StartDateTime%20%3E%3D%3A$d0/EndDateTime%20%3C%3D%3A$d1.json?page=1&limit=100&sort=StartDateTime&direction=desc" \
+  "101,107" "101,102,103,104,107,108"
+replay "the app's Timeline (cause Continuous, per camera)" "events/index/MonitorId%3A1/StartDateTime%20%3E%3D%3A$d0/EndDateTime%20%3C%3D%3A$d1/Cause%20REGEXP%3AContinuous.json?page=1&limit=100&sort=StartDateTime&direction=desc" \
+  "107" "102,103,104,107,108"
+replay "the app's tag filter" "events/index/Tags.Id%3A$person.json?page=1&limit=100&sort=StartDateTime&direction=desc" \
+  "101" "101,104,105,108"
+replay "the app's \"Only detected objects\"" "events/index/Notes%20REGEXP%3Adetected%3A.json?page=1&limit=100&sort=StartDateTime&direction=desc" \
+  "" ""
+replay "the app's new-events badge" "events/index/MonitorId%3A1/StartDateTime%20%3E%3A2026-11-18%2018%3A00%3A00.json?limit=1&sort=StartDateTime&direction=desc" \
+  "107" "107"
+napi "$vtok" "events/index/MonitorId%3A1/StartDateTime%20%3E%3A2026-11-18%2018%3A00%3A00.json?limit=1&sort=StartDateTime&direction=desc"
+is "the badge counts viewer's alerts since" 1 "$(printf '%s' "$body" | jq -r '.pagination.count')"
+napi "$vtok" "events/index/MonitorId%3A1/StartDateTime%20%3E%3A2026-11-18%2018%3A00%3A00.json?limit=1&sort=StartDateTime&direction=desc&show=all"
+is "the badge, show=all, counts every event since" 4 "$(printf '%s' "$body" | jq -r '.pagination.count')"
+replay "the app's next event" "events/index/StartDateTime%20%3E%3A2026-11-18%2018%3A00%3A00.json?page=1&limit=1&sort=StartDateTime&direction=asc" \
+  "107" "102"
+replay "the app's previous event" "events/index/StartDateTime%20%3C%3A2026-11-18%2018%3A25%3A00.json?page=1&limit=1&sort=StartDateTime&direction=desc" \
+  "101" "104"
+# Opening an event by id, as a push does: one that isn't an alert opens as before.
+napi "$vtok" 'events/103.json'
+is "the app opens an event that isn't an alert by id (a push)" 200 "$code"
+is "the event by id" 103 "$(printf '%s' "$body" | jq -r '.event.Event.Id')"
+# show=all as a named segment, and in the query string with no named segments (the app's bare
+# /events/index.json without paging).
+napi "$vtok" 'events/index/show%3Aall.json?page=1&limit=100&sort=StartDateTime&direction=desc'
+is "show:all as a named segment: 200" 200 "$code"
+is "show:all as a named segment: every event" "1,101,102,103,104,105,107,108" "$(apiids)"
+napi "$vtok" 'events/index.json?show=all'
+is "show=all, no named segments, no paging: 200" 200 "$code"
+is "show=all, no named segments, no paging: every event" "1,101,102,103,104,105,107,108" "$(apiids)"
+napi "$vtok" 'events/index.json'
+is "no named segments, no paging: viewer's alerts" "101,107" "$(apiids)"
+# consoleEvents is left alone: every event (O492).
+napi "$vtok" 'events/consoleEvents/1000%20day.json'
+is "consoleEvents: 200" 200 "$code"
+is "consoleEvents counts every event, not only alerts" "$(q "SELECT COUNT(*) FROM Events WHERE MonitorId=1 AND StartDateTime >= NOW() - INTERVAL 1000 DAY")" \
+  "$(printf '%s' "$body" | jq -r '.results["1"]')"
+
+# The rules now: a change shows at once, past events included; all alerts off lists nothing.
+q "UPDATE detector.alert_rules SET labels='[\"car\"]' WHERE user_id=$viewer AND monitor_id=1"
+is "the rules now: viewer switches to cars" "102" "$(listids "$(upage viewer 'view=request&request=events&task=query')")"
+napi "$vtok" 'events/index.json?page=1&limit=100&sort=StartDateTime&direction=desc'
+is "the rules now, through the API" "102" "$(apiids)"
+q "INSERT INTO detector.alert_users (user_id, alerts) VALUES ($viewer, 0)"
+is "all alerts off: nothing listed" "" "$(listids "$(upage viewer 'view=request&request=events&task=query')")"
+is "all alerts off: All Events still lists every event" "1,101,102,103,104,105,107,108" "$(listids "$(upage viewer 'view=request&request=events&task=query&show=all')")"
+q "DELETE FROM detector.alert_users WHERE user_id=$viewer"
+# The chart's moment (conf.d), in place of live detection's first alarm row.
+docker exec "$name" sh -c 'echo "ZM_ALERTS_SINCE=2026-11-17 00:00:00" > /etc/zm/conf.d/zz-alerts-test.conf'
+is "ZM_ALERTS_SINCE from conf.d: admin's alerts from 17 November" "101,105,106,108" "$(listids "$(upage admin 'view=request&request=events&task=query')")"
+docker exec "$name" rm -f /etc/zm/conf.d/zz-alerts-test.conf
+
+# The console's event counts dropped (O491); Montage Review asks for every event.
+page=$(upage admin 'view=console')
+has "the console still shows" 'id="consoleTableBody"' "$page"
+hasnt "the console's event counts are gone" 'data-field="TotalEvents"\|data-field="HourEvents"\|data-field="MonthEvents"' "$page"
+is "Montage Review asks the API for every event" 2 "$(docker exec "$name" grep -c "show=all" /usr/share/zoneminder/www/skins/classic/views/js/montagereview.js)"
+
 echo "smoke test passed"
