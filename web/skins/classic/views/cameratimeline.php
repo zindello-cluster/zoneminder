@@ -64,7 +64,11 @@ echo getNavBarHTML();
       <div class="tlDialogBody">
         <div class="tlRow"><label for="tlExportFrom"><?php echo translate('From') ?></label><input type="text" id="tlExportFrom" class="form-control"/></div>
         <div class="tlRow"><label for="tlExportTo"><?php echo translate('To') ?></label><input type="text" id="tlExportTo" class="form-control"/><span id="tlExportLength" class="text-muted"></span></div>
-        <p class="text-muted"><?php echo translate('One MP4 file, the recording as the camera sent it, joined across its sections and downloaded by this browser.') ?></p>
+        <div class="tlChoice"><label><input type="radio" name="tlExportBoxes" value="0" checked/> <b><?php echo translate('Without boxes') ?></b><br/>
+          <span class="text-muted"><?php echo translate('The recording as the camera sent it, joined into one file. Quick: nothing is encoded again.') ?></span></label></div>
+        <div class="tlChoice"><label><input type="radio" name="tlExportBoxes" value="1"/> <b><?php echo translate('With boxes') ?></b><br/>
+          <span class="text-muted"><?php echo translate('Live detection\'s boxes drawn into the picture, at the camera\'s own size, cut to the second. Encoded again on the graphics card, one export at a time, so it takes longer.') ?></span></label></div>
+        <p class="text-muted"><?php echo translate('One MP4 file, downloaded by this browser.') ?></p>
         <p id="tlExportStatus"></p>
       </div>
       <div class="tlDialogFoot">

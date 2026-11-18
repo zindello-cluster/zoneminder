@@ -161,13 +161,16 @@ if ($what == 'export') {
     ajaxError('Nothing recorded there yet.');
     return;
   }
+  $boxed = !empty($_REQUEST['boxes']);
   $parts = timeline_export_parts(timeline_sections($mid, $from, $to, $longest, $clock, $now), $from, $to);
   $list = '';
+  $request = array();
   foreach ($parts as $p) {
     $Event = new ZM\Event($p['section'][0]);
     $file = $Event->DefaultVideo() ? $Event->Path().'/'.$Event->DefaultVideo() : '';
     if (!$file or !is_readable($file)) continue;
     $list .= "file '".str_replace("'", "'\\''", $file)."'\n".sprintf("inpoint %.3f\noutpoint %.3f\n", $p['in'], $p['out']);
+    $request[] = array('file' => $file, 'start' => $p['section'][1], 'in' => $p['in'], 'out' => $p['out']);
   }
   if ($list === '') {
     ajaxError('There is no recording in that part.');
@@ -189,6 +192,27 @@ if ($what == 'export') {
   file_put_contents($dir.'/parts.txt', $list);
   $name = preg_replace('/[^A-Za-z0-9 ._-]/', '', $Monitor->Name()).' '.date('Y-m-d H.i.s', intval($from)).' to '.date('H.i.s', intval($to)).'.mp4';
   file_put_contents($dir.'/name', $name);
+  if ($boxed) {
+    // With boxes (cluster-docs docs/zoneminder-boxed-export.md; O486, O496, O500-O503): not made
+    // here. The parts and live detection's boxes over them go in the folder, and the boxed exporter,
+    // a pod of its own, starts a Job for it (one at a time) on the M4000, which leaves the file.
+    $settings = $detector ? dbFetchOne('SELECT per_second FROM `'.ZM_TIMELINE_DB.'`.detector_settings WHERE monitor_id=?', false, array($mid)) : null;
+    $interval = ($settings and intval($settings['per_second']) > 0) ? 1.0 / intval($settings['per_second']) : 0.2;
+    $frames = array();
+    if ($detector) {
+      foreach (dbFetchAll('SELECT TIMESTAMPDIFF(MICROSECOND, \'1970-01-01 00:00:00\', frame_time) AS us, boxes FROM `'.ZM_TIMELINE_DB.'`.detector_frames '.
+          'WHERE monitor_id=? AND frame_time >= ? AND frame_time < ? ORDER BY frame_time', false,
+          array($mid, timeline_utc($from - 2), timeline_utc($to + 1))) as $row) {
+        $frames[] = array('t' => intval($row['us']) / 1000000.0, 'boxes' => json_decode($row['boxes']));
+      }
+    }
+    file_put_contents($dir.'/request.json', json_encode(array('width' => intval($Monitor->Width()), 'height' => intval($Monitor->Height()),
+      'interval' => $interval, 'parts' => $request)));
+    file_put_contents($dir.'/boxes.json', json_encode(array('frames' => $frames)));
+    file_put_contents($dir.'/boxed', '');  // last: the exporter takes the folder once this is there
+    ajaxResponse(array('job' => $job, 'name' => $name, 'parts' => count($request), 'boxed' => true));
+    return;
+  }
   $cmd = ZM_PATH_FFMPEG.' -nostdin -loglevel error -f concat -safe 0 -i '.escapeshellarg($dir.'/parts.txt')
     .' -c copy -movflags +faststart -f mp4 '.escapeshellarg($dir.'/out.part');
   exec('nohup sh -c '.escapeshellarg('('.$cmd.' && mv '.escapeshellarg($dir.'/out.part').' '.escapeshellarg($dir.'/out.mp4')
@@ -206,6 +230,8 @@ if ($what == 'exportstatus' or $what == 'exportfile') {
   $name = @file_get_contents($dir.'/name');
   if ($what == 'exportstatus') {
     $state = file_exists($dir.'/out.mp4') ? 'ready' : (file_exists($dir.'/failed') ? 'failed' : 'making');
+    // A boxed export not yet started by the exporter waits its turn (one at a time).
+    if ($state == 'making' and file_exists($dir.'/boxed') and !file_exists($dir.'/started')) $state = 'waiting';
     ajaxResponse(array('state' => $state, 'name' => $name,
       'size' => file_exists($dir.'/out.mp4') ? filesize($dir.'/out.mp4') : (file_exists($dir.'/out.part') ? filesize($dir.'/out.part') : 0)));
     return;

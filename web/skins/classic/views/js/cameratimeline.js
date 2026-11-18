@@ -632,7 +632,8 @@ if (typeof window !== 'undefined' && typeof $j !== 'undefined') {
       if (r.error) return;
       $j('#tlExportGo').prop('disabled', true);
       $j('#tlExportStatus').text('Making the file…');
-      $j.post(thisUrl + '?view=request&request=cameratimeline&what=export&mid=' + tlMonitorId + '&from=' + r.from + '&to=' + r.to)
+      var boxes = $j('input[name=tlExportBoxes]:checked').val() == '1';
+      $j.post(thisUrl + '?view=request&request=cameratimeline&what=export&mid=' + tlMonitorId + '&from=' + r.from + '&to=' + r.to + (boxes ? '&boxes=1' : ''))
           .done(function(data) {
             if (data.result != 'Ok') {
               $j('#tlExportStatus').text(data.message || 'The export couldn\'t be started.');
@@ -666,7 +667,11 @@ if (typeof window !== 'undefined' && typeof $j !== 'undefined') {
               setTimeout(function() { $j('#tlExportDialog').hide(); }, 4000);
               return;
             }
-            $j('#tlExportStatus').text('Making the file… ' + mb + ' MB so far.');
+            if (data.state == 'waiting') {
+              $j('#tlExportStatus').text('Waiting for another export to finish (one with boxes at a time)…');
+            } else {
+              $j('#tlExportStatus').text(mb ? 'Making the file… ' + mb + ' MB so far.' : 'Making the file…');
+            }
             setTimeout(function() { exportPoll(job); }, 2000);
           });
     }

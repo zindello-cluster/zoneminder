@@ -595,4 +595,26 @@ is "fetched, it's gone" 0 "$(docker exec "$name" sh -c 'ls /var/tmp/zm/timeline 
 has "over an hour is refused" 'up to an hour' "$(upage admin "view=request&request=cameratimeline&what=export&mid=1&from=$t0&to=$((t0 + 3700))")"
 has "the timeline's Export" 'id="tlExport"' "$(upage admin 'view=cameratimeline&mid=1')"
 
+# ---- With boxes (cluster-docs docs/zoneminder-boxed-export.md; O486, O496, O500-O503): the page
+# writes the parts and live detection's boxes for the boxed exporter's Job, and waits its turn.
+sql detector -e "INSERT INTO detector_frames VALUES (1, '2026-11-18 07:00:40.000000', 1, '[{\"label\":\"person\",\"confidence\":0.87,\"box\":[0.25,0.25,0.75,0.75],\"track\":1}]'),
+  (1, '2026-11-18 07:00:40.200000', 2, '[{\"label\":\"person\",\"confidence\":0.88,\"box\":[0.26,0.25,0.76,0.75],\"track\":1}]')"
+job=$(upage admin "view=request&request=cameratimeline&what=export&mid=1&from=$((t0 + 30))&to=$((t0 + 330))&boxes=1" | jq -r '.job // empty')
+test -n "$job" || fail "the boxed export didn't start"
+dir=/var/tmp/zm/timeline/$job
+is "a boxed export waits for the exporter" waiting "$(upage admin "view=request&request=cameratimeline&what=exportstatus&mid=1&from=0&to=1&job=$job" | jq -r '.state')"
+req=$(docker exec "$name" cat "$dir/request.json")
+is "its request: the camera's own size" "640x480" "$(printf '%s' "$req" | jq -r '"\(.width)x\(.height)"')"
+is "its request: the parts, 101's last 31 s and 102's first 30 s" "101:30:61 102:0:30" \
+  "$(printf '%s' "$req" | jq -r '[.parts[] | "\(.file|capture("/(?<e>[0-9]+)-video").e):\(.in|round):\(.out|round)"] | join(" ")')"
+is "its request: each part from its section's first frame" "$t0" "$(printf '%s' "$req" | jq -r '.parts[0].start|floor')"
+is "its boxes: live detection's frames in the part" 2 "$(docker exec "$name" cat "$dir/boxes.json" | jq '.frames|length')"
+is "nothing made in ZoneMinder's pod" no "$(docker exec "$name" sh -c "test -e $dir/out.part -o -e $dir/out.mp4 && echo yes || echo no")"
+# The exporter starts its Job; the Job leaves the file.
+docker exec "$name" sh -c "touch $dir/started"
+is "once started, it's being made" making "$(upage admin "view=request&request=cameratimeline&what=exportstatus&mid=1&from=0&to=1&job=$job" | jq -r '.state')"
+docker exec "$name" sh -c "cp /var/cache/zoneminder/events/1/2026-11-18/101/101-video.mp4 $dir/out.mp4"
+is "the Job's file is ready" ready "$(upage admin "view=request&request=cameratimeline&what=exportstatus&mid=1&from=0&to=1&job=$job" | jq -r '.state')"
+has "the timeline's With boxes choice" 'name="tlExportBoxes" value="1"' "$(upage admin 'view=cameratimeline&mid=1')"
+
 echo "smoke test passed"
