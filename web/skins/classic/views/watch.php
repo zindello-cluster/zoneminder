@@ -270,6 +270,14 @@ echo getNavBarHTML() ?>
         <button type="button" id="liveBoxesButton" class="btn btn-secondary" title="<?php echo translate('Boxes') ?>">
             <span class="material-icons md-18">crop_free</span>
         </button>
+<?php
+  // zindello-cluster: this camera's timeline (cluster-docs docs/zoneminder-ui.md, section 3).
+  if (canView('Events')) {
+?>
+        <a id="timelineButton" class="btn btn-secondary" href="?view=cameratimeline&amp;mid=<?php echo $monitor->Id() ?>" title="<?php echo translate('Timeline') ?>">
+            <span class="material-icons md-18">view_timeline</span>
+        </a>
+<?php } ?>
         <button type="button" id="ptzToggle" class="btn <?php echo $showPtzControls ? 'btn-primary':'btn-secondary'?>"
 <?php
     if ($monitor->Controllable() && canView('Control') && ($monitor->Type() != 'WebSite')) {

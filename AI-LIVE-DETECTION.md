@@ -47,6 +47,15 @@ Every change is marked `zindello-cluster` in a comment where it sits.
    `consoleEvents` and `search` are unchanged. The console's event count columns are dropped
    (`views/console.php`), and Montage Review asks the API for every event (`views/js/montagereview.js`).
 
+9. **A camera's timeline** (cluster-docs `docs/zoneminder-ui.md`, section 3; O482, O484, O493,
+   O494): `?view=cameratimeline&mid=N`, the recording under a bar of the camera's 30 days with
+   spans of 30 days, 7 days, 24 hours and 1 hour, a position dragged anywhere and played from,
+   the span changed around it, the bar dragged sideways, live detection's alarms and the user's
+   alerts marked, and live at the right end (`views/cameratimeline.php`,
+   `views/js/cameratimeline.js` and `.js.php`, `css/base/views/cameratimeline.css`; its data,
+   `ajax/cameratimeline.php`). Reached from the console (`views/js/console.js`), the camera page
+   and the event page.
+
 `git log $(cat ai-live-detection/UPSTREAM_RELEASE)..ai-live-detection -- web` lists them.
 
 ## The branches
