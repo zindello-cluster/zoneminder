@@ -595,7 +595,7 @@ is "fetched, it's gone" 0 "$(docker exec "$name" sh -c 'ls /var/tmp/zm/timeline 
 has "over an hour is refused" 'up to an hour' "$(upage admin "view=request&request=cameratimeline&what=export&mid=1&from=$t0&to=$((t0 + 3700))")"
 has "the timeline's Export" 'id="tlExport"' "$(upage admin 'view=cameratimeline&mid=1')"
 
-# ---- With boxes (cluster-docs docs/zoneminder-boxed-export.md; O486, O496, O500-O503): the page
+# ---- With boxes (cluster-docs docs/zoneminder-boxed-export.md; O486, O496, O501-O504): the page
 # writes the parts and live detection's boxes for the boxed exporter's Job, and waits its turn.
 sql detector -e "INSERT INTO detector_frames VALUES (1, '2026-11-18 07:00:40.000000', 1, '[{\"label\":\"person\",\"confidence\":0.87,\"box\":[0.25,0.25,0.75,0.75],\"track\":1}]'),
   (1, '2026-11-18 07:00:40.200000', 2, '[{\"label\":\"person\",\"confidence\":0.88,\"box\":[0.26,0.25,0.76,0.75],\"track\":1}]')"
