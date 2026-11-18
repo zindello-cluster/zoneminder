@@ -536,6 +536,13 @@ is "Montage Review asks the API for every event" 2 "$(docker exec "$name" grep -
 # ---- A camera's timeline (cluster-docs docs/zoneminder-ui.md, section 3): its page, its links,
 # and its data request; its arithmetic on its own (tests/timeline.test.js).
 node ai-live-detection/tests/timeline.test.js || fail "the timeline's arithmetic"
+# Live's fading boxes, by speed, on their own (tests/detections.test.js), and on for the live
+# pictures only (the camera page's Live and the timeline's live end), not recordings.
+node ai-live-detection/tests/detections.test.js || fail "live's fading boxes"
+js=/usr/share/zoneminder/www/skins/classic/views/js
+is "fading on for the camera page's Live" 1 "$(docker exec "$name" grep -c "fade: true" "$js/watch.js")"
+is "fading on for the timeline's live end" 1 "$(docker exec "$name" grep -c "fade: true" "$js/cameratimeline.js")"
+is "fading off for recordings" 0 "$(docker exec "$name" grep -c "fade: true" "$js/event.js" || true)"
 sec() { docker exec "$name" php -r 'date_default_timezone_set("Australia/Sydney"); echo strtotime($argv[1]);' "$1"; }
 t0=$(sec '2026-11-18 18:00:00')
 t1=$((t0 + 3600))

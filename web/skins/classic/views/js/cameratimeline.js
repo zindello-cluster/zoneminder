@@ -681,7 +681,8 @@ if (typeof window !== 'undefined' && typeof $j !== 'undefined') {
       img = document.getElementById('tlLive');
       canvas = document.getElementById('tlBar');
       st.overlayVideo = ZMDetections.overlay(video, {visible: true});
-      st.overlayLive = ZMDetections.overlay(img, {visible: true});
+      // fade: a missing object's box grey and fading, by its speed (detections.js), live only.
+      st.overlayLive = ZMDetections.overlay(img, {visible: true, fade: true});
       var cookie = getCookie(tlBoxesCookie);
       st.boxes = cookie ? (cookie == '1') : null;
       if (st.boxes !== null) showBoxes();

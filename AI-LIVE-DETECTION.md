@@ -17,7 +17,16 @@ Every change is marked `zindello-cluster` in a comment where it sits.
 2. **Boxes over recorded events,** exact by video time: a Boxes button on the event page
    (`views/event.php`, `views/js/event.js`).
 3. **Live with boxes on the camera page:** a Live button and a Boxes toggle (`views/watch.php`,
-   `views/js/watch.js`).
+   `views/js/watch.js`). On the live pictures only (Live here and the timeline's live end, not
+   recordings), a tracked object missing from the frame drawn keeps its last box, grey and fading,
+   for 0 to 5 of the camera's samples by how fast it was moving (`fade` in `js/detections.js`,
+   `fadingFor` and `holdOf`; its test `ai-live-detection/tests/detections.test.js`). The owner, 19
+   November 2026: "if an object disappears maybe draw the box grey and fading for up to 5 frames
+   before dropping it out completely", and "For a car travelling through the frame, we might only
+   hold onto it for 1 frame (or not at all) and for relatively stationary objects hold for up to 5
+   frames". The rule and the measurements behind it are external-security.zindello.com.au's
+   `docs/live-detection.md`, "Live: matched by frame stamp"; the dash's cameras page and the
+   wall's boxed stream follow it too.
 4. **The Detection tab in Options,** per camera: live on or off, what to look for, the confidence,
    the frames a second, boxes shown, which objects may raise an alarm (`views/options.php`, `views/_options_detection.php`, the tab
    list in `includes/functions.php`).
