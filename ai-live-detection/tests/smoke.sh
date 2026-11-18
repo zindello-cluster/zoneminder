@@ -533,4 +533,39 @@ has "the console still shows" 'id="consoleTableBody"' "$page"
 hasnt "the console's event counts are gone" 'data-field="TotalEvents"\|data-field="HourEvents"\|data-field="MonthEvents"' "$page"
 is "Montage Review asks the API for every event" 2 "$(docker exec "$name" grep -c "show=all" /usr/share/zoneminder/www/skins/classic/views/js/montagereview.js)"
 
+# ---- A camera's timeline (cluster-docs docs/zoneminder-ui.md, section 3): its page, its links,
+# and its data request; its arithmetic on its own (tests/timeline.test.js).
+node ai-live-detection/tests/timeline.test.js || fail "the timeline's arithmetic"
+sec() { docker exec "$name" php -r 'date_default_timezone_set("Australia/Sydney"); echo strtotime($argv[1]);' "$1"; }
+t0=$(sec '2026-11-18 18:00:00')
+t1=$((t0 + 3600))
+# A raise of live detection's alarm at 18:15:30 (UTC 07:15:30), a person and a car.
+sql detector -e "INSERT INTO detector_alarms VALUES (1, '2026-11-18 07:15:30', 'person', '2026-11-18 07:15:30', '2026-11-18 07:15:40', 0.9, 1, NULL),
+  (1, '2026-11-18 07:15:30', 'car', '2026-11-18 07:15:32', '2026-11-18 07:15:38', 0.8, 0, NULL)"
+page=$(upage admin 'view=cameratimeline&mid=1')
+has "the timeline page" 'id="tlBar"' "$page"
+has "the timeline's spans" 'data-span="30d"' "$page"
+has "the timeline's script" 'cameratimeline' "$page"
+has "the timeline's Live" 'id="tlLiveButton"' "$page"
+has "the camera page's Timeline button" 'id="timelineButton"' "$(upage admin 'view=watch&mid=1')"
+has "the event page's link to the timeline" "view=cameratimeline&amp;mid=1&amp;span=1h&amp;t=$t0" "$(upage admin 'view=event&eid=101')"
+is "the console's Timeline button (its script)" 1 "$(docker exec "$name" grep -c 'view=cameratimeline' /usr/share/zoneminder/www/skins/classic/views/js/console.js)"
+bar=$(upage admin "view=request&request=cameratimeline&what=bar&mid=1&from=$t0&to=$t1&cols=60")
+is "the bar: recording by the minute, 18:00 to 18:06 (101, a gap, 102)" "1100011" "$(printf '%s' "$bar" | jq -r '.rec[0:7]')"
+is "the bar: one alarm, at 18:15" "1:1" "$(printf '%s' "$bar" | jq -r '"\(.alarms|add):\(.alarms[15])"')"
+is "the bar: admin's one alert, at 18:00 (101)" "1:1" "$(printf '%s' "$bar" | jq -r '"\(.alerts|add):\(.alerts[0])"')"
+is "the bar at an hour: the alarm's types" '["car","person"]' "$(printf '%s' "$bar" | jq -c '.alarmList[0].labels')"
+is "the bar at an hour: the alert's event" 101 "$(printf '%s' "$bar" | jq -r '.alertList[0].id')"
+is "the bar at an hour: the alarm from its first sighting" "$((t0 + 930))" "$(printf '%s' "$bar" | jq -r '.alarmList[0].start|floor')"
+bar=$(upage admin "view=request&request=cameratimeline&what=bar&mid=1&from=$((t0 - 30 * 86400))&to=$t1&cols=720")
+is "the bar at 30 days: no detail" "null" "$(printf '%s' "$bar" | jq -r '.alarmList')"
+is "the bar at 30 days: 720 columns" 720 "$(printf '%s' "$bar" | jq -r '.rec|length')"
+sections=$(upage admin "view=request&request=cameratimeline&what=sections&mid=1&from=$t0&to=$t1")
+is "the sections in the hour" "101,102,103,104,107" "$(printf '%s' "$sections" | jq -r '[.sections[].id]|join(",")')"
+is "a section's start, to the second" "$t0" "$(printf '%s' "$sections" | jq -r '.sections[0].start|floor')"
+is "a section's end, through its last second" "$((t0 + 61))" "$(printf '%s' "$sections" | jq -r '.sections[0].end|floor')"
+has "sections for more than four hours are refused" 'up to four hours' "$(upage admin "view=request&request=cameratimeline&what=sections&mid=1&from=$t0&to=$((t0 + 5 * 3600))")"
+has "a camera viewer may not view: not found" 'Not found' "$(upage viewer "view=request&request=cameratimeline&what=bar&mid=2&from=$t0&to=$t1&cols=60")"
+has "its page refused to viewer" 'view=error\|Error\|Not\|error' "$(upage viewer 'view=cameratimeline&mid=2')"
+
 echo "smoke test passed"

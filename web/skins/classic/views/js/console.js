@@ -224,6 +224,12 @@ function processRows(rows) {
       nameHtml += row.Name;
     }
 
+    // zindello-cluster: the camera's timeline (cluster-docs docs/zoneminder-ui.md, section 3).
+    if (canView.Events) {
+      nameHtml += '<br/><a class="btn btn-normal btn-sm timelineButton" href="?view=cameratimeline&amp;mid=' + mid + '">' +
+        '<i class="material-icons md-18">view_timeline</i> Timeline</a>';
+    }
+
     // Add groups
     if (row.Groups) {
       nameHtml += '<br/><div class="small text-nowrap text-muted">' + row.Groups + '</div>';

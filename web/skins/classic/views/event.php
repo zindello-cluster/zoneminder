@@ -217,6 +217,9 @@ if ( $Event->Id() and !file_exists($Event->Path()) )
   // zindello-cluster: live detection's boxes over the recording, on or off (docs/live-detection.md,
   // "Recorded events"). Anyone who can see the event can see its boxes.
   echo '<button id="toggleBoxesButton" class="btn btn-normal" title="'.translate('Boxes').'"><span class="material-icons">crop_free</span></button>';
+  // zindello-cluster: the camera's timeline at an hour, centred on this event (cluster-docs
+  // docs/zoneminder-ui.md, section 3).
+  echo '<a id="timelineLink" class="btn btn-normal" href="?view=cameratimeline&amp;mid='.$Event->MonitorId().'&amp;span=1h&amp;t='.intval($Event->StartDateTimeSecs()).'" title="'.translate('Show on the timeline').'"><span class="material-icons">view_timeline</span></a>';
   } // end if Event->Id
 ?>
       </div>
