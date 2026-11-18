@@ -21,3 +21,6 @@
 .camera-tab .cam-picture { flex: 1; min-width: 0; }
 .camera-tab .cam-picture img, .camera-tab .cam-picture canvas { width: 100%; height: auto; border: 1px solid #cdd3dc; display: block; }
 .camera-tab .cam-tag { font-size: 0.8em; color: #fff; background: #8a93a0; border-radius: 3px; padding: 1px 6px; margin-left: 6px; font-weight: normal; }
+/* The monitor page's own Save, Save and Close and Cancel are for its own form, not the camera: hidden
+   while the Camera tab is the one shown, back on every other tab (the owner, 18 November 2026: "Sure"). */
+#contentForm:has(#pills-camera.active) #contentButtons { display: none; }

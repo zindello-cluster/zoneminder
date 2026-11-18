@@ -629,6 +629,11 @@ q "UPDATE Monitors SET User='admin', Pass='cam-throwaway' WHERE Id=1"
 vigi() { docker exec "$name" cat /tmp/vigi.json; }
 has "the Camera tab on the camera's page" 'id="camera-tab"' "$(upage admin 'view=monitor&mid=1')"
 has "its script" 'camerasettings' "$(upage admin 'view=monitor&mid=1')"
+css=$(upage admin 'view=monitor&mid=1&tab=camera' | sed -n 's/.*href="\([^"]*camerasettings[^"]*\.css\)".*/\1/p' | head -1)
+test -n "$css" || fail "no Camera tab stylesheet on the camera's page"
+has "the monitor's own Save and Cancel hidden only while the Camera tab is shown" \
+  '#contentForm:has(#pills-camera.active) #contentButtons { display: none; }' "$(docker exec "$name" curl -s "http://127.0.0.1/zm/$css")"
+has "and still on the page for every other tab" 'id="contentButtons"' "$(upage admin 'view=monitor&mid=1&tab=camera')"
 hasnt "no Camera tab on a camera camera setup doesn't set" 'id="camera-tab"' "$(upage admin 'view=monitor&mid=2')"
 hasnt "no Camera tab for someone who can't view System settings" 'id="camera-tab"' "$(upage viewer 'view=monitor&mid=1')"
 read=$(upage admin 'view=request&request=camerasettings&action=read&mid=1')
