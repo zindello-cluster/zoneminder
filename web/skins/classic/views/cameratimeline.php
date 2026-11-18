@@ -36,6 +36,7 @@ echo getNavBarHTML();
     <span class="tlRight">
       <a id="tlCameraLink" class="btn btn-normal" href="?view=watch&amp;mid=<?php echo $mid ?>"><?php echo translate('Camera') ?></a>
       <button type="button" id="tlBoxes" class="btn btn-normal" title="<?php echo translate('Boxes') ?>"><span class="material-icons md-18">crop_free</span> <?php echo translate('Boxes') ?></button>
+      <button type="button" id="tlExport" class="btn btn-primary" title="<?php echo translate('One MP4 of up to an hour') ?>"><span class="material-icons md-18">download</span> <span id="tlExportText"><?php echo translate('Export') ?></span></button>
     </span>
   </div>
   <div id="tlPlayer">
@@ -56,6 +57,21 @@ echo getNavBarHTML();
       <button type="button" class="btn btn-normal" data-span="1h"><?php echo translate('1 hour') ?></button>
     </span>
     <button type="button" id="tlLiveButton" class="btn btn-normal"><span class="material-icons md-18">sensors</span> <?php echo translate('Live') ?></button>
+  </div>
+  <div id="tlExportDialog" style="display:none">
+    <div class="tlDialog">
+      <h3><?php echo translate('Export from').' '.validHtmlStr($monitor->Name()) ?></h3>
+      <div class="tlDialogBody">
+        <div class="tlRow"><label for="tlExportFrom"><?php echo translate('From') ?></label><input type="text" id="tlExportFrom" class="form-control"/></div>
+        <div class="tlRow"><label for="tlExportTo"><?php echo translate('To') ?></label><input type="text" id="tlExportTo" class="form-control"/><span id="tlExportLength" class="text-muted"></span></div>
+        <p class="text-muted"><?php echo translate('One MP4 file, the recording as the camera sent it, joined across its sections and downloaded by this browser.') ?></p>
+        <p id="tlExportStatus"></p>
+      </div>
+      <div class="tlDialogFoot">
+        <button type="button" id="tlExportCancel" class="btn btn-normal"><?php echo translate('Cancel') ?></button>
+        <button type="button" id="tlExportGo" class="btn btn-primary"><span class="material-icons md-18">download</span> <?php echo translate('Export') ?></button>
+      </div>
+    </div>
   </div>
   <div id="tlBarArea">
     <div id="tlLanes"><div><?php echo translate('Recording') ?></div><div><?php echo translate('Alarms') ?></div><div><?php echo translate('Alerts') ?></div></div>

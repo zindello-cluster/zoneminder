@@ -49,4 +49,12 @@ assert.strictEqual(TL.sectionAfter(s, s[3]), null);
 // Ticks at least 90 px apart.
 assert.strictEqual(TL.tickStep([0, 3600], 1200, 90), 300);
 assert.strictEqual(TL.tickStep([0, 30 * DAY], 1400, 90), 2 * DAY);
+// Export: a part chosen on the time scale stops growing at an hour, either way, and not past now;
+// Export takes the part, else the window at an hour or less, up to now.
+assert.deepStrictEqual(TL.capSelection(now - 7200, now - 1000, 3600, now), [now - 7200, now - 3600]);
+assert.deepStrictEqual(TL.capSelection(now - 1000, now - 7200, 3600, now), [now - 4600, now - 1000]);
+assert.deepStrictEqual(TL.capSelection(now - 600, now + 600, 3600, now), [now - 600, now]);
+assert.deepStrictEqual(TL.exportRange([now - 1800, now + 1800], null, now, 3600), [now - 1800, now], 'this hour, up to now');
+assert.strictEqual(TL.exportRange([now - DAY, now], null, now, 3600), null, 'choose a part first');
+assert.deepStrictEqual(TL.exportRange([now - DAY, now], [now - 900, now - 300], now, 3600), [now - 900, now - 300]);
 console.log('ok: the timeline\'s arithmetic');

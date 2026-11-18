@@ -19,6 +19,15 @@
 #tlLanes { position: absolute; left: 0; top: 24px; width: 80px; text-align: right; font-size: 0.8rem; color: #57606f; }
 #tlLanes div { height: 26px; line-height: 22px; padding-right: 8px; }
 #tlBar { position: absolute; left: 84px; right: 0; top: 0; height: 132px; width: calc(100% - 84px); touch-action: none; cursor: grab; }
+#tlExportDialog { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); z-index: 1050; }
+#tlExportDialog .tlDialog { position: absolute; left: 50%; top: 18%; width: 560px; max-width: calc(100% - 32px); transform: translateX(-50%);
+  background: #fff; border-radius: 4px; text-align: left; box-shadow: 0 6px 30px rgba(0, 0, 0, 0.35); }
+#tlExportDialog h3 { margin: 0; padding: 14px 18px; font-size: 1.1rem; font-weight: 600; border-bottom: 1px solid #e4e7eb; }
+#tlExportDialog .tlDialogBody { padding: 14px 18px; }
+#tlExportDialog .tlRow { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+#tlExportDialog .tlRow label { width: 50px; margin: 0; }
+#tlExportDialog .tlRow input { width: 13em; }
+#tlExportDialog .tlDialogFoot { padding: 12px 18px; border-top: 1px solid #e4e7eb; display: flex; justify-content: flex-end; gap: 8px; }
 @media (max-width: 600px) {
   #tlLanes { display: none; }
   #tlBar { left: 0; width: 100%; }
