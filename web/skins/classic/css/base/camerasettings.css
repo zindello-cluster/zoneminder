@@ -1,0 +1,26 @@
+/* zindello-cluster: the Camera tab on a camera's own page (views/_monitor_camera.php). */
+.camera-tab { list-style: none; display: block; max-width: none; }
+.camera-tab .cam-bar { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.camera-tab .cam-fill { flex: 1; }
+.camera-tab .cam-muted { color: #6b7480; font-size: 0.9em; }
+.camera-tab .cam-banner { padding: 7px 12px; border-radius: 3px; margin: 6px 0; }
+.camera-tab .cam-ok { background: #e3f4e8; border: 1px solid #5cb874; color: #1e6b33; }
+.camera-tab .cam-pending { background: #fff6d6; border: 1px solid #e0b030; color: #6b5200; }
+.camera-tab .cam-error { background: #fbe6e6; border: 1px solid #d9534f; color: #8a1f1b; }
+.camera-tab .cam-cols { display: flex; gap: 24px; flex-wrap: wrap; }
+.camera-tab .cam-col { flex: 1; min-width: 380px; }
+.camera-tab h4 { font-size: 1em; font-weight: bold; margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #dfe3e9; }
+.camera-tab .cam-row { display: flex; align-items: center; min-height: 30px; }
+.camera-tab .cam-k { width: 200px; }
+.camera-tab .cam-v { flex: 1; }
+.camera-tab .cam-v select { min-width: 200px; }
+.camera-tab .cam-v input[type=range] { width: 190px; vertical-align: middle; }
+.camera-tab .cam-changed { outline: 2px solid #f0c040; }
+.camera-tab .cam-switches label { margin-right: 18px; line-height: 28px; }
+.camera-tab .cam-pictures { display: flex; gap: 10px; }
+.camera-tab .cam-picture { flex: 1; min-width: 0; }
+.camera-tab .cam-picture img, .camera-tab .cam-picture canvas { width: 100%; height: auto; border: 1px solid #cdd3dc; display: block; }
+.camera-tab .cam-tag { font-size: 0.8em; color: #fff; background: #8a93a0; border-radius: 3px; padding: 1px 6px; margin-left: 6px; font-weight: normal; }
+/* The monitor page's own Save, Save and Close and Cancel are for its own form, not the camera: hidden
+   while the Camera tab is the one shown, back on every other tab (the owner, 18 November 2026: "Sure"). */
+#contentForm:has(#pills-camera.active) #contentButtons { display: none; }

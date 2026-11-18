@@ -389,6 +389,11 @@ if ( $monitor->Type() != 'WebSite' ) {
   if (defined('ZM_OPT_USE_GEOLOCATION') and ZM_OPT_USE_GEOLOCATION)
     $tabs['location'] = translate('Location');
   $tabs['mqtt'] = translate('MQTT');
+  // zindello-cluster: the Camera tab, a VIGI camera's own settings (cluster-docs
+  // docs/zoneminder-camera-tab.md, O508-O511), for the cameras camera setup sets, to whoever may view
+  // System settings.
+  require_once('includes/vigi.php');
+  if ($monitor->Id() and canView('System') and vigi_camera_of($monitor)) $tabs['camera'] = 'Camera';
 }
 
 if (isset($_REQUEST['tab']) and isset($tabs[$_REQUEST['tab']]) ) {
@@ -1666,6 +1671,9 @@ echo htmlSelect('newMonitor[ReturnLocation]', $return_options, $monitor->ReturnL
 <?php
     break;
   case 'zones':
+    break;
+  case 'camera':  // zindello-cluster: the Camera tab (views/_monitor_camera.php)
+    include('_monitor_camera.php');
     break;
   default :
     ZM\Error("Unknown tab \"$name\"");
