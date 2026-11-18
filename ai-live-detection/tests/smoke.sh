@@ -617,4 +617,43 @@ docker exec "$name" sh -c "cp /var/cache/zoneminder/events/1/2026-11-18/101/101-
 is "the Job's file is ready" ready "$(upage admin "view=request&request=cameratimeline&what=exportstatus&mid=1&from=0&to=1&job=$job" | jq -r '.state')"
 has "the timeline's With boxes choice" 'name="tlExportBoxes" value="1"' "$(upage admin 'view=cameratimeline&mid=1')"
 
+# ---- The Camera tab (cluster-docs docs/zoneminder-camera-tab.md; O508-O511): a fake VIGI on a
+# loopback address in ZoneMinder's container, the Smoke camera marked as camera setup's, its login the
+# monitor's own.
+docker cp "$(dirname "$0")/fake_vigi.py" "$name:/tmp/fake_vigi.py"
+docker exec -u 0 "$name" sh -c 'mkdir -p /opt/camsetup && printf "%s" "{\"cameras\": [{\"name\": \"Smoke camera\", \"address\": \"127.0.0.5\"}]}" > /opt/camsetup/config.json'
+docker exec -u 0 "$name" openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/vigi.key -out /tmp/vigi.crt -days 1 -subj /CN=vigi 2>/dev/null
+docker exec -u 0 -d "$name" python3 /tmp/fake_vigi.py 127.0.0.5 443 /tmp/vigi.crt /tmp/vigi.key cam-throwaway /tmp/vigi.json
+sleep 2
+q "UPDATE Monitors SET User='admin', Pass='cam-throwaway' WHERE Id=1"
+vigi() { docker exec "$name" cat /tmp/vigi.json; }
+has "the Camera tab on the camera's page" 'id="camera-tab"' "$(upage admin 'view=monitor&mid=1')"
+has "its script" 'camerasettings' "$(upage admin 'view=monitor&mid=1')"
+hasnt "no Camera tab on a camera camera setup doesn't set" 'id="camera-tab"' "$(upage admin 'view=monitor&mid=2')"
+hasnt "no Camera tab for someone who can't view System settings" 'id="camera-tab"' "$(upage viewer 'view=monitor&mid=1')"
+read=$(upage admin 'view=request&request=camerasettings&action=read&mid=1')
+is "read: the Lighting Mode as the camera has it" md_night_vision "$(printf '%s' "$read" | jq -r '.camera.fields[] | select(.id=="night_vision_mode") | .value')"
+is "read: the on-screen Channel Name and its words" "on VIGI C340 2.0" "$(printf '%s' "$read" | jq -r '.camera.fields[] | select(.id=="osd_label_1") | "\(.value) \(.text)"')"
+is "read: camera setup's, read only" "H264 · 2560×1440 · 15 fps · VBR to 3072 kb/s · H.264+ Off" "$(printf '%s' "$read" | jq -r '.camera.setup["Main stream"]')"
+is "read: one login" 1 "$(vigi | jq .logins)"
+hasnt "read: no password in the answer" 'cam-throwaway' "$read"
+saved=$(upost admin 'view=request' 'request=camerasettings&action=save&mid=1&changes[night_vision_mode]=inf_night_vision&changes[inf_type]=off&changes[osd_label_1]=off&changes[luma]=60')
+is "save: what changed, read back" "Lighting Mode Motion-triggered Color → Infrared Lighting; Infrared Light Auto → Always Off; Channel Name on → off; Brightness 50 → 60" \
+  "$(printf '%s' "$saved" | jq -r '.camera.changedWords')"
+is "save: on the camera" "inf_night_vision off off 60" "$(vigi | jq -r '"\(.image.switch.night_vision_mode) \(.image.common.inf_type) \(.OSD.label_info_1.enabled) \(.image.common.luma)"')"
+is "save: the on-screen text's words and place kept" "VIGI C340 2.0 9222" "$(vigi | jq -r '"\(.OSD.label_info_1.text) \(.OSD.label_info_1.y_coor)"')"
+is "save: one login" 2 "$(vigi | jq .logins)"
+has "save: in ZoneMinder's Log" 'Camera settings: admin, Smoke camera: Lighting Mode Motion-triggered Color → Infrared Lighting' \
+  "$(q "SELECT Message FROM Logs WHERE Message LIKE 'Camera settings:%' ORDER BY Id DESC LIMIT 1")"
+again=$(upost admin 'view=request' 'request=camerasettings&action=save&mid=1&changes[night_vision_mode]=inf_night_vision')
+is "save again: nothing to change" "" "$(printf '%s' "$again" | jq -r '.camera.changedWords')"
+is "save again: nothing sent (still the first save's three calls)" 3 "$(vigi | jq '.sets | length')"
+has "a choice the tab doesn't offer is refused" "isn't a choice" "$(upost admin 'view=request' 'request=camerasettings&action=save&mid=1&changes[inf_type]=schedule')"
+has "saving needs System: Edit" 'Not found\|System: Edit' "$(upost viewer 'view=request' 'request=camerasettings&action=save&mid=1&changes[luma]=10')"
+is "and the camera wasn't changed by it" 60 "$(vigi | jq -r '.image.common.luma')"
+q "UPDATE Monitors SET Pass='not-its-password' WHERE Id=1"
+refused=$(upage admin 'view=request&request=camerasettings&action=read&mid=1')
+has "a refused login is said" 'refused its login (it says 9 tries are left of 10)' "$refused"
+is "and tried once only" 1 "$(vigi | jq .refused)"
+
 echo "smoke test passed"
