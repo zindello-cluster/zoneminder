@@ -214,12 +214,12 @@ if (typeof window !== 'undefined' && typeof $j !== 'undefined') {
       // A part chosen for export (views/js/cameratimeline.js's export, when there is one).
       if (typeof tlDrawExtra == 'function') tlDrawExtra(g, X, TOP, lane(3), ay, W);
       // Now: the live end.
-      var nx = X(st.now);
+      var nx = X(st.now), lx = null;
       if (nx >= -2 && nx <= W + 2) {
         nx = Math.min(W - 2, Math.max(1, nx));
         g.fillStyle = COL.live;
         g.fillRect(nx - 1, TOP - 4, 3, 3 * LANE + 2 * GAP + 8);
-        var lx = Math.min(W - 40, nx + 4);
+        lx = Math.min(W - 40, nx + 4);
         g.fillRect(lx, 2, 38, 16);
         g.fillStyle = '#ffffff';
         g.font = 'bold 10px sans-serif';
@@ -239,6 +239,8 @@ if (typeof window !== 'undefined' && typeof $j !== 'undefined') {
         g.font = '11px sans-serif';
         var tw = g.measureText(text).width + 12;
         var bx = Math.min(W - tw, Math.max(0, px + 12));
+        // Clear of the LIVE tag: the other side of the handle.
+        if (lx !== null && bx < lx + 40 && bx + tw > lx) bx = Math.max(0, px - 12 - tw);
         g.fillRect(bx, 0, tw, 16);
         g.fillStyle = '#ffffff';
         g.textAlign = 'left';

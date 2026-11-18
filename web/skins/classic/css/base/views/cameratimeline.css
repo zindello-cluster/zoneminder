@@ -3,7 +3,7 @@
 #tlHeader h2 { margin: 0; font-size: 1.3rem; font-weight: 600; }
 #tlHeader .tlCrumb { color: #57606f; }
 #tlHeader .tlRight { margin-left: auto; display: flex; gap: 8px; }
-#tlPlayer { position: relative; margin: 0 auto; max-width: 1280px; width: 100%; background: #111; }
+#tlPlayer { position: relative; margin: 0 auto; width: 100%; max-width: min(1280px, calc((100vh - 330px) * 16 / 9)); background: #111; }
 #tlFrame { position: relative; width: 100%; aspect-ratio: 16 / 9; }
 #tlFrame video, #tlFrame img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; background: #111; }
 #tlFrame canvas.detections { position: absolute; pointer-events: none; }
