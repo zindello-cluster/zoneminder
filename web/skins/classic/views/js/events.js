@@ -46,6 +46,7 @@ function ajaxRequest(params) {
     const el = $j(this);
     params.data[el.attr('name')] = el.val();
   });
+  if ($j('#showFilter').length) params.data.show = $j('#showFilter').val();  // zindello-cluster: Show
   if (ajax) ajax.abort();
   ajax = $j.ajax({
     method: 'POST',
@@ -589,7 +590,7 @@ function initDatepickerEventsPage() {
 // Build filterQuery string from current form field values
 function buildFilterQuery() {
   var query = '';
-  $j('#fieldsTable input, #fieldsTable select, #objectFilter').each(function() {  // zindello-cluster: the Object filter
+  $j('#fieldsTable input, #fieldsTable select, #objectFilter, #showFilter').each(function() {  // zindello-cluster: the Object filter, Show
     const el = $j(this);
     query += '&' + encodeURIComponent(el.attr('name')) + '=' + encodeURIComponent(el.val());
   });
@@ -634,4 +635,13 @@ function totalDiskSpaceFormatter(data) {
 $j(document).ready(function() {
   initPage();
   $j('#objectFilter').on('change', filterEvents);  // zindello-cluster: the Object filter
+  // zindello-cluster: Show: Alerts or All Events.
+  $j('#showAlerts, #showAll').on('click', function(e) {
+    const show = $j(this).data('show');
+    $j('#showFilter').val(show);
+    $j('#showAlerts').toggleClass('btn-primary active', show == 'alerts').toggleClass('btn-normal', show != 'alerts');
+    $j('#showAll').toggleClass('btn-primary active', show == 'all').toggleClass('btn-normal', show != 'all');
+    $j('#showAlertsNote').toggle(show == 'alerts');
+    filterEvents(e);
+  });
 });

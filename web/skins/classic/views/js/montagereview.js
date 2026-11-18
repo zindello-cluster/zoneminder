@@ -1296,7 +1296,7 @@ function loadEventData(e) {
   if (mon_ids.length) {
     for (let i=0; i < mon_ids.length; i++) {
       ajaxRequests.push($j.ajax({
-        url: url+ '/MonitorId:'+mon_ids[i]+ '.json'+'?'+auth_relay,
+        url: url+ '/MonitorId:'+mon_ids[i]+ '.json'+'?'+auth_relay+'&show=all',  // zindello-cluster: every event, not only alerts
         method: 'GET',
         //url: thisUrl + '?view=request&request=events&task=query&sort=Id&order=ASC',
         //data: data,
@@ -1311,7 +1311,7 @@ function loadEventData(e) {
     } // end foreach monitor
   } else {
     ajaxRequests.push($j.ajax({
-      url: url+'.json'+'?'+auth_relay,
+      url: url+'.json'+'?'+auth_relay+'&show=all',  // zindello-cluster: every event, not only alerts
       method: 'GET',
       //url: thisUrl + '?view=request&request=events&task=query&sort=Id&order=ASC',
       //data: data,

@@ -115,6 +115,23 @@ echo getNavBarHTML();
     echo '<span class="term" id="objectFilterTerm"><label for="objectFilter">'.translate('Object').'</label> ';
     echo htmlSelect('object', array_merge(array('' => translate('Any object')), $objectLabels), $objectSelected, array('id' => 'objectFilter', 'class' => 'chosen'));
     echo '</span>';
+    // zindello-cluster: Show: Alerts (the default) or All Events. Alerts are the signed-in user's:
+    // events the event server tagged with a type they have on for that camera now
+    // (includes/alerts_list.php; cluster-docs docs/zoneminder-ui.md, O487-O498). Not offered with
+    // sign-in off or without the alert rules' tables: then every event is listed, as upstream's.
+    require_once('includes/alerts_list.php');
+    if (alerts_list_condition('E') !== null) {
+      $showAll = !alerts_list_wanted(isset($_REQUEST['show']) ? $_REQUEST['show'] : null);
+      echo '<span class="term" id="showFilterTerm"><label>'.translate('Show').'</label> ';
+      echo '<input type="hidden" name="show" id="showFilter" value="'.($showAll ? 'all' : 'alerts').'"/>';
+      echo '<span class="btn-group" role="group">';
+      echo '<button type="button" id="showAlerts" data-show="alerts" class="btn '.($showAll ? 'btn-normal' : 'btn-primary active').'">'.translate('Alerts').'</button>';
+      echo '<button type="button" id="showAll" data-show="all" class="btn '.($showAll ? 'btn-primary active' : 'btn-normal').'">'.translate('All Events').'</button>';
+      echo '</span>';
+      echo ' <span id="showAlertsNote" class="text-muted small"'.($showAll ? ' style="display:none"' : '').'>'
+        .translate('Events where a type you have switched on for that camera, on the Event Server page, raised or joined its alarm.').'</span>';
+      echo '</span>';
+    }
   ?>
 
           </div> <!-- .col-sm-9-->

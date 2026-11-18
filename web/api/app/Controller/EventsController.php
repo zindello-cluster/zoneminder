@@ -44,6 +44,15 @@ class EventsController extends AppController {
 
     $this->FilterComponent = $this->Components->load('Filter');
     $named_params = $this->request->params['named'];
+    // zindello-cluster: the caller's alerts unless show=all, in the query string or as a named
+    // segment (includes/alerts_list.php; cluster-docs docs/zoneminder-ui.md, O487-O498). It's taken
+    // out here, before the filter is built: as a named segment it isn't a column (a 400), and in
+    // the query string it would reach the SQL as one.
+    $show = $this->request->query('show');
+    if (isset($named_params['show'])) {
+      $show = $named_params['show'];
+      unset($named_params['show']);
+    }
     $tag_filter_value = null;
     $tag_filter_field = null;
     if ($named_params) {
@@ -118,6 +127,7 @@ class EventsController extends AppController {
 
     } else {
       $raw_params = $_REQUEST;
+      unset($raw_params['show']);  // zindello-cluster: not a column (above)
       if (isset($raw_params['TagId'])) {
         $tag_filter_value = $raw_params['TagId'];
         $tag_filter_field = 'Id';
@@ -206,6 +216,12 @@ class EventsController extends AppController {
     }
 
     $settings['conditions'] = array($conditions, $mon_options);
+    // zindello-cluster: the caller's alerts (above).
+    require_once __DIR__ .'/../../../includes/alerts_list.php';
+    if (alerts_list_wanted($show)) {
+      $alerts = alerts_list_condition('Event');
+      if ($alerts !== null) $settings['conditions'][] = $alerts;
+    }
 
     $this->Paginator->settings = $settings;
     if ($this->request->query('limit') or $this->request->query('page')) {
