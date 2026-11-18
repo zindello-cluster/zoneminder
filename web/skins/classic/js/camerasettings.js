@@ -3,7 +3,8 @@
 // camera when the tab is first shown (one login), marks what's changed, sends it all on Save (one
 // login, read back), never retries a refusal; keeps ZoneMinder's live picture of the camera beside
 // it, and a Snapshot of it to compare with.
-(function() {
+// ZoneMinder loads jQuery and its own globals (thisUrl) after the page's body: start once they're in.
+document.addEventListener('DOMContentLoaded', function() {
   'use strict';
   const tab = document.getElementById('cameraTab');
   if (!tab) return;
@@ -230,4 +231,4 @@
   }
   $j('#camera-tab').on('shown.bs.tab', shown);
   if (tab.offsetParent) shown(); // opened straight on this tab (?tab=camera)
-})();
+});
