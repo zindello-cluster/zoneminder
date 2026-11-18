@@ -568,4 +568,31 @@ has "sections for more than four hours are refused" 'up to four hours' "$(upage 
 has "a camera viewer may not view: not found" 'Not found' "$(upage viewer "view=request&request=cameratimeline&what=bar&mid=2&from=$t0&to=$t1&cols=60")"
 has "its page refused to viewer" 'view=error\|Error\|Not\|error' "$(upage viewer 'view=cameratimeline&mid=2')"
 
+# ---- Export from the timeline (cluster-docs docs/zoneminder-ui.md, section 4; O486, O495, O497):
+# one MP4 joined across the sections, cut to the part, up to an hour; only whoever asked fetches it.
+q "UPDATE Events SET DefaultVideo=CONCAT(Id, '-video.mp4'), Videoed=1 WHERE Id IN (101, 102)"
+for e in 101 102; do
+  docker exec "$name" sh -c "d=/var/cache/zoneminder/events/1/2026-11-18/$e && mkdir -p \$d && ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=320x240:rate=15 -t 61 -c:v libx264 -preset ultrafast -g 15 -pix_fmt yuv420p -movflags +faststart \$d/$e-video.mp4 && chown -R www-data \$d" \
+    || fail "test recordings"
+done
+# 18:00:30 to 18:05:30: the last 31 s of 101 (it ends 18:01:00, through that second), a gap, the first 30 s of 102.
+job=$(upage admin "view=request&request=cameratimeline&what=export&mid=1&from=$((t0 + 30))&to=$((t0 + 330))" | jq -r '.job // empty')
+test -n "$job" || fail "the export didn't start"
+ok "the export starts"
+for i in $(seq 30); do
+  state=$(upage admin "view=request&request=cameratimeline&what=exportstatus&mid=1&from=0&to=1&job=$job" | jq -r '.state')
+  [ "$state" = making ] || break
+  sleep 1
+done
+is "the export is made" ready "$state"
+has "only whoever asked may fetch it" 'No such export' "$(upage viewer "view=request&request=cameratimeline&what=exportstatus&mid=1&from=0&to=1&job=$job")"
+docker exec "$name" curl -s -D /tmp/export.head -o /tmp/export.mp4 -c /tmp/admin.jar -b /tmp/admin.jar \
+  "http://127.0.0.1/zm/index.php?view=request&request=cameratimeline&what=exportfile&mid=1&from=0&to=1&job=$job"
+has "a download, named for the camera and the part" 'attachment; filename="Smoke camera 2026-11-18 18.00.30 to 18.05.30.mp4"' "$(docker exec "$name" cat /tmp/export.head)"
+length=$(docker exec "$name" ffprobe -v error -show_entries format=duration -of csv=p=0 /tmp/export.mp4)
+is "one MP4 of the part: 61 s, give or take a keyframe ($length)" yes "$(echo "$length" | awk '{print ($1 >= 59 && $1 <= 64) ? "yes" : "no"}')"
+is "fetched, it's gone" 0 "$(docker exec "$name" sh -c 'ls /var/tmp/zm/timeline 2>/dev/null | wc -l' | tr -d ' ')"
+has "over an hour is refused" 'up to an hour' "$(upage admin "view=request&request=cameratimeline&what=export&mid=1&from=$t0&to=$((t0 + 3700))")"
+has "the timeline's Export" 'id="tlExport"' "$(upage admin 'view=cameratimeline&mid=1')"
+
 echo "smoke test passed"

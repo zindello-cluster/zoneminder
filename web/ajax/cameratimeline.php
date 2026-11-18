@@ -20,6 +20,7 @@
 ini_set('display_errors', '');
 
 require_once('includes/Monitor.php');
+require_once('includes/Event.php');
 require_once('includes/alerts_list.php');
 
 define('ZM_TIMELINE_DB', ZM_ALERT_RULES_DB);
@@ -103,8 +104,129 @@ if ($what == 'sections') {
   return;
 }
 
+// ---- Export (the owner, 18 November 2026: "Format: Joined MP4 / ... / Where: Browser Download /
+// Long spans: Limit exports to 1h", "Anyone who views", O486, O495, O497): the part [from, to),
+// at most an hour, as one MP4 joined across the sections, nothing encoded again. It's made in the
+// background (an hour of a large camera is about 2 GB, longer than a page may wait through
+// Cloudflare), in ZoneMinder's export folder, and fetched once ready; the files go when fetched,
+// or after an hour.
+//   what=export&mid&from&to  starts it: {job}
+//   what=exportstatus&job    {state: making|ready|failed, size, name}
+//   what=exportfile&job      the file, as a download
+define('ZM_TIMELINE_EXPORT_MAX', 3600);
+function timeline_export_dir() {
+  return ZM_DIR_EXPORTS.'/timeline';
+}
+function timeline_export_job_dir($job) {
+  global $user;
+  if (!is_string($job) or !preg_match('/^[0-9a-f]{32}$/', $job)) return null;
+  $dir = timeline_export_dir().'/'.$job;
+  if (!is_dir($dir)) return null;
+  $owner = @file_get_contents($dir.'/owner');
+  if ($owner === false or intval($owner) !== intval($user ? $user->Id() : 0)) return null;  // only whoever asked
+  return $dir;
+}
+// The parts of each section that play over [from, to), as the player plays them: the
+// later-started section where two overlap; gaps skipped.
+function timeline_export_parts($sections, $from, $to) {
+  $parts = array();
+  $t = $from;
+  while ($t < $to) {
+    $cur = null;
+    foreach ($sections as $s) {
+      if ($s[1] <= $t and $t < $s[2] and (!$cur or $s[1] > $cur[1])) $cur = $s;
+    }
+    if (!$cur) {
+      $next = null;
+      foreach ($sections as $s) if ($s[1] > $t and (!$next or $s[1] < $next[1])) $next = $s;
+      if (!$next or $next[1] >= $to) break;
+      $t = $next[1];
+      continue;
+    }
+    $end = min($cur[2], $to);
+    foreach ($sections as $s) if ($s[1] > $t and $s[1] < $end) $end = $s[1];  // a later one starts: it plays from there
+    $parts[] = array('section' => $cur, 'in' => $t - $cur[1], 'out' => $end - $cur[1]);
+    $t = $end;
+  }
+  return $parts;
+}
+
+if ($what == 'export') {
+  if (($to - $from) > ZM_TIMELINE_EXPORT_MAX + 1) {
+    ajaxError('An export is up to an hour.');
+    return;
+  }
+  $to = min($to, $now);
+  if ($to <= $from) {
+    ajaxError('Nothing recorded there yet.');
+    return;
+  }
+  $parts = timeline_export_parts(timeline_sections($mid, $from, $to, $longest, $clock, $now), $from, $to);
+  $list = '';
+  foreach ($parts as $p) {
+    $Event = new ZM\Event($p['section'][0]);
+    $file = $Event->DefaultVideo() ? $Event->Path().'/'.$Event->DefaultVideo() : '';
+    if (!$file or !is_readable($file)) continue;
+    $list .= "file '".str_replace("'", "'\\''", $file)."'\n".sprintf("inpoint %.3f\noutpoint %.3f\n", $p['in'], $p['out']);
+  }
+  if ($list === '') {
+    ajaxError('There is no recording in that part.');
+    return;
+  }
+  // Clear out what's older than an hour, then a folder of this job's own.
+  $root = timeline_export_dir();
+  if (!is_dir($root) and !@mkdir($root, 0700, true)) {
+    ajaxError('The export folder can\'t be made.');
+    return;
+  }
+  foreach (glob($root.'/*', GLOB_ONLYDIR) as $old) {
+    if (filemtime($old) < time() - 3600) exec('rm -rf '.escapeshellarg($old));
+  }
+  $job = bin2hex(random_bytes(16));
+  $dir = $root.'/'.$job;
+  mkdir($dir, 0700);
+  file_put_contents($dir.'/owner', strval($user ? $user->Id() : 0));
+  file_put_contents($dir.'/parts.txt', $list);
+  $name = preg_replace('/[^A-Za-z0-9 ._-]/', '', $Monitor->Name()).' '.date('Y-m-d H.i.s', intval($from)).' to '.date('H.i.s', intval($to)).'.mp4';
+  file_put_contents($dir.'/name', $name);
+  $cmd = ZM_PATH_FFMPEG.' -nostdin -loglevel error -f concat -safe 0 -i '.escapeshellarg($dir.'/parts.txt')
+    .' -c copy -movflags +faststart -f mp4 '.escapeshellarg($dir.'/out.part');
+  exec('nohup sh -c '.escapeshellarg('('.$cmd.' && mv '.escapeshellarg($dir.'/out.part').' '.escapeshellarg($dir.'/out.mp4')
+    .') > '.escapeshellarg($dir.'/log').' 2>&1 || touch '.escapeshellarg($dir.'/failed')).' > /dev/null 2>&1 &');
+  ajaxResponse(array('job' => $job, 'name' => $name, 'parts' => count($parts)));
+  return;
+}
+
+if ($what == 'exportstatus' or $what == 'exportfile') {
+  $dir = timeline_export_job_dir(isset($_REQUEST['job']) ? $_REQUEST['job'] : '');
+  if (!$dir) {
+    ajaxError('No such export.');
+    return;
+  }
+  $name = @file_get_contents($dir.'/name');
+  if ($what == 'exportstatus') {
+    $state = file_exists($dir.'/out.mp4') ? 'ready' : (file_exists($dir.'/failed') ? 'failed' : 'making');
+    ajaxResponse(array('state' => $state, 'name' => $name,
+      'size' => file_exists($dir.'/out.mp4') ? filesize($dir.'/out.mp4') : (file_exists($dir.'/out.part') ? filesize($dir.'/out.part') : 0)));
+    return;
+  }
+  $file = $dir.'/out.mp4';
+  if (!file_exists($file)) {
+    ajaxError('Not ready.');
+    return;
+  }
+  while (ob_get_level()) ob_end_clean();
+  header('Content-Type: video/mp4');
+  header('Content-Length: '.filesize($file));
+  header('Content-Disposition: attachment; filename="'.str_replace('"', '', $name).'"');
+  header('Cache-Control: no-store');
+  readfile($file);
+  exec('rm -rf '.escapeshellarg($dir));
+  exit;
+}
+
 if ($what != 'bar') {
-  ajaxError('what: bar or sections');
+  ajaxError('what: bar, sections, export, exportstatus or exportfile');
   return;
 }
 

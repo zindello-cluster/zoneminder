@@ -56,6 +56,14 @@ Every change is marked `zindello-cluster` in a comment where it sits.
    `ajax/cameratimeline.php`). Reached from the console (`views/js/console.js`), the camera page
    and the event page.
 
+10. **Export from the timeline** (cluster-docs `docs/zoneminder-ui.md`, section 4; O485, O486,
+    O495, O497): drag along the time scale to choose a part, up to an hour, or export the hour on
+    the bar; one MP4 joined across the sections and cut to the part, nothing encoded again, made in
+    the background in ZoneMinder's export folder and downloaded by the browser; only whoever asked
+    may fetch it, and it goes once fetched or after an hour (`ajax/cameratimeline.php`,
+    `what=export`, `exportstatus`, `exportfile`). With boxes waits for the owner's agreement to its
+    Job.
+
 `git log $(cat ai-live-detection/UPSTREAM_RELEASE)..ai-live-detection -- web` lists them.
 
 ## The branches

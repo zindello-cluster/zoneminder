@@ -80,8 +80,22 @@ var TL = (function() {
     for (var i = 0; i < STEPS.length; i++) if (STEPS[i] / perPx >= minPx) return STEPS[i];
     return STEPS[STEPS.length - 1];
   }
+  // A part chosen on the time scale, from where the drag began to where it is: it stops growing
+  // at `max` seconds ("Selection capped", O495), and never runs past now.
+  function capSelection(anchor, t, max, now) {
+    t = Math.min(t, now);
+    anchor = Math.min(anchor, now);
+    return t >= anchor ? [anchor, Math.min(t, anchor + max)] : [Math.max(t, anchor - max), anchor];
+  }
+  // What Export exports: the part chosen, else the window when it's an hour or less (up to now);
+  // null: choose a part first.
+  function exportRange(win, sel, now, max) {
+    var r = sel ? [sel[0], Math.min(sel[1], now)] : ((win[1] - win[0] <= max + 0.001) ? [win[0], Math.min(win[1], now)] : null);
+    return (r && r[1] > r[0]) ? r : null;
+  }
   return {SPANS: SPANS, windowFor: windowFor, pan: pan, toX: toX, toTime: toTime, sectionAt: sectionAt,
-    sectionAfter: sectionAfter, sectionFrom: sectionFrom, tickStep: tickStep};
+    sectionAfter: sectionAfter, sectionFrom: sectionFrom, tickStep: tickStep, capSelection: capSelection,
+    exportRange: exportRange};
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = TL;
 
@@ -95,8 +109,9 @@ if (typeof window !== 'undefined' && typeof $j !== 'undefined') {
       span: tlSpan, pos: 0, live: false, playing: false, win: null, now: Date.now() / 1000,
       bar: null, barTimer: null, sections: [], sectionsRange: null, section: null, loading: null,
       overlayVideo: null, overlayLive: null, boxes: null, frames: {}, liveAbort: null, livePoll: null,
-      liveNewest: 0, liveTimers: [], liveShown: null, drag: null, raf: null
+      liveNewest: 0, liveTimers: [], liveShown: null, drag: null, raf: null, sel: null, selDrag: null, job: null
     };
+    var EXPORT_MAX = 3600;
     var video, img, canvas;
 
     function now() {
@@ -142,6 +157,7 @@ if (typeof window !== 'undefined' && typeof $j !== 'undefined') {
       st.win = win;
       draw();
       fetchBar();
+      exportButton();
     }
     function draw() {
       if (st.raf) return;
@@ -211,8 +227,21 @@ if (typeof window !== 'undefined' && typeof $j !== 'undefined') {
         var label = (step >= 86400 || midnight) ? fmt(t, 'ccc d LLL') : fmt(t, 'HH:mm');
         g.fillText(label, Math.min(W - 30, Math.max(30, x)), ay + 20);
       }
-      // A part chosen for export (views/js/cameratimeline.js's export, when there is one).
-      if (typeof tlDrawExtra == 'function') tlDrawExtra(g, X, TOP, lane(3), ay, W);
+      // A part chosen for export: blue across the lanes, a handle at each end on the time scale.
+      if (st.sel) {
+        var s0 = X(st.sel[0]), s1 = X(st.sel[1]);
+        g.fillStyle = 'rgba(52, 152, 219, 0.25)';
+        g.fillRect(s0, TOP - 2, s1 - s0, ay + 22 - TOP);
+        g.fillStyle = '#3498db';
+        g.fillRect(s0 - 1, TOP - 2, 2, ay + 22 - TOP);
+        g.fillRect(s1 - 1, TOP - 2, 2, ay + 22 - TOP);
+        g.fillRect(s0 - 5, ay + 6, 10, 16);
+        g.fillRect(s1 - 5, ay + 6, 10, 16);
+        g.fillStyle = '#1e5f8c';
+        g.font = '11px sans-serif';
+        g.textAlign = 'left';
+        g.fillText(fmt(st.sel[0], 'HH:mm:ss') + ' – ' + fmt(st.sel[1], 'HH:mm:ss'), Math.max(0, s0 + 4), 12);
+      }
       // Now: the live end.
       var nx = X(st.now), lx = null;
       if (nx >= -2 && nx <= W + 2) {
@@ -489,13 +518,19 @@ if (typeof window !== 'undefined' && typeof $j !== 'undefined') {
       var p = pointer(e), W = width();
       var px = TL.toX(st.live ? st.now : st.pos, st.win, W);
       var axisTop = TOP + 3 * (LANE + GAP);
-      if (typeof tlAxisDown == 'function' && p.y >= axisTop && tlAxisDown(e, p, st, W)) return;
+      if (p.y >= axisTop) {
+        selDown(e, p, W);
+        return;
+      }
       st.drag = {x: p.x, startX: p.x, win: st.win.slice(), what: (!st.live && Math.abs(p.x - px) <= 10) ? 'position' : 'pan', moved: false};
       canvas.setPointerCapture(e.pointerId);
       e.preventDefault();
     }
     function onMove(e) {
-      if (typeof tlAxisMove == 'function' && tlAxisMove(e, pointer(e), st, width())) return;
+      if (st.selDrag) {
+        selMove(pointer(e));
+        return;
+      }
       var d = st.drag;
       if (!d) return;
       var p = pointer(e);
@@ -510,7 +545,10 @@ if (typeof window !== 'undefined' && typeof $j !== 'undefined') {
       draw();
     }
     function onUp(e) {
-      if (typeof tlAxisUp == 'function' && tlAxisUp(e, pointer(e), st, width())) return;
+      if (st.selDrag) {
+        selUp(pointer(e));
+        return;
+      }
       var d = st.drag;
       st.drag = null;
       if (!d) return;
@@ -521,6 +559,116 @@ if (typeof window !== 'undefined' && typeof $j !== 'undefined') {
       } else {
         fetchBar();
       }
+      exportButton();
+    }
+
+    // ---- Export (O485, O486, O495, O497): drag along the time scale to choose a part, up to an
+    // hour; drag one of its ends to change it; a click on the scale clears it.
+    function selDown(e, p, W) {
+      var t = TL.toTime(p.x, st.win, W);
+      var anchor = t, near = 8;
+      if (st.sel) {
+        var s0 = TL.toX(st.sel[0], st.win, W), s1 = TL.toX(st.sel[1], st.win, W);
+        if (Math.abs(p.x - s0) <= near) anchor = st.sel[1];
+        else if (Math.abs(p.x - s1) <= near) anchor = st.sel[0];
+      }
+      st.selDrag = {anchor: anchor, startX: p.x, moved: false};
+      canvas.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    }
+    function selMove(p) {
+      var d = st.selDrag;
+      if (Math.abs(p.x - d.startX) > 3) d.moved = true;
+      if (!d.moved) return;
+      st.sel = TL.capSelection(d.anchor, TL.toTime(p.x, st.win, width()), EXPORT_MAX, now());
+      exportButton();
+      draw();
+    }
+    function selUp(p) {
+      var d = st.selDrag;
+      st.selDrag = null;
+      if (!d.moved) st.sel = null;
+      exportButton();
+      draw();
+    }
+    function duration(n) {
+      n = Math.round(n);
+      var m = Math.floor(n / 60), sec = n % 60;
+      return (m ? m + ' min' : '') + (m && sec ? ' ' : '') + (sec || !m ? sec + ' s' : '');
+    }
+    function exportButton() {
+      var r = TL.exportRange(st.win, st.sel, now(), EXPORT_MAX);
+      $j('#tlExportText').text(st.sel && r ? 'Export ' + duration(r[1] - r[0]) : (r ? 'Export this hour' : 'Export'));
+    }
+    function exportOpen() {
+      var r = TL.exportRange(st.win, st.sel, now(), EXPORT_MAX);
+      if (!r) {
+        message('Choose up to an hour to export: drag along the time scale under the bar.');
+        return;
+      }
+      $j('#tlExportFrom').val(fmt(r[0], 'yyyy-LL-dd HH:mm:ss'));
+      $j('#tlExportTo').val(fmt(r[1], 'yyyy-LL-dd HH:mm:ss'));
+      exportCheck();
+      $j('#tlExportStatus').text('');
+      $j('#tlExportGo').prop('disabled', false);
+      $j('#tlExportDialog').show();
+    }
+    function exportFields() {
+      var a = DateTime.fromFormat($j('#tlExportFrom').val().trim(), 'yyyy-LL-dd HH:mm:ss');
+      var b = DateTime.fromFormat($j('#tlExportTo').val().trim(), 'yyyy-LL-dd HH:mm:ss');
+      if (!a.isValid || !b.isValid) return {error: 'From and To as 2026-11-18 15:42:00.'};
+      var f = a.toSeconds(), t = Math.min(b.toSeconds(), now());
+      if (t <= f) return {error: 'To must be after From, and not after now.'};
+      if (t - f > EXPORT_MAX) return {error: 'An export is up to an hour.'};
+      return {from: f, to: t};
+    }
+    function exportCheck() {
+      var r = exportFields();
+      $j('#tlExportLength').text(r.error ? r.error : duration(r.to - r.from) + ', up to an hour');
+      $j('#tlExportGo').prop('disabled', !!r.error);
+    }
+    function exportStart() {
+      var r = exportFields();
+      if (r.error) return;
+      $j('#tlExportGo').prop('disabled', true);
+      $j('#tlExportStatus').text('Making the file…');
+      $j.post(thisUrl + '?view=request&request=cameratimeline&what=export&mid=' + tlMonitorId + '&from=' + r.from + '&to=' + r.to)
+          .done(function(data) {
+            if (data.result != 'Ok') {
+              $j('#tlExportStatus').text(data.message || 'The export couldn\'t be started.');
+              $j('#tlExportGo').prop('disabled', false);
+              return;
+            }
+            st.job = data.job;
+            exportPoll(data.job);
+          })
+          .fail(function() {
+            $j('#tlExportStatus').text('The export couldn\'t be started.');
+            $j('#tlExportGo').prop('disabled', false);
+          });
+    }
+    function exportPoll(job) {
+      if (st.job !== job) return;
+      $j.getJSON(thisUrl + '?view=request&request=cameratimeline&what=exportstatus&mid=' + tlMonitorId + '&from=0&to=1&job=' + job)
+          .done(function(data) {
+            if (st.job !== job) return;
+            if (data.result != 'Ok' || data.state == 'failed') {
+              $j('#tlExportStatus').text('The file couldn\'t be made. If the part ends in the last few minutes, the recording there may not be finished yet: try an earlier part, or again shortly.');
+              $j('#tlExportGo').prop('disabled', false);
+              st.job = null;
+              return;
+            }
+            var mb = Math.round(data.size / 1e6);
+            if (data.state == 'ready') {
+              $j('#tlExportStatus').text('Ready: ' + mb + ' MB, downloading.');
+              st.job = null;
+              window.location.href = thisUrl + '?view=request&request=cameratimeline&what=exportfile&mid=' + tlMonitorId + '&from=0&to=1&job=' + job;
+              setTimeout(function() { $j('#tlExportDialog').hide(); }, 4000);
+              return;
+            }
+            $j('#tlExportStatus').text('Making the file… ' + mb + ' MB so far.');
+            setTimeout(function() { exportPoll(job); }, 2000);
+          });
     }
 
     $j(document).ready(function() {
@@ -540,7 +688,11 @@ if (typeof window !== 'undefined' && typeof $j !== 'undefined') {
       });
       $j('#tlPlay').on('click', playPause);
       $j('#tlLiveButton').on('click', goLive);
-      $j('#tlSpans button').on('click', function() { setSpan($j(this).data('span')); });
+      $j('#tlSpans button').on('click', function() { setSpan($j(this).data('span')); exportButton(); });
+      $j('#tlExport').on('click', exportOpen);
+      $j('#tlExportFrom, #tlExportTo').on('input', exportCheck);
+      $j('#tlExportGo').on('click', exportStart);
+      $j('#tlExportCancel').on('click', function() { st.job = null; $j('#tlExportDialog').hide(); });
       if ('requestVideoFrameCallback' in video) {
         var frame = function() { onVideoTime(); video.requestVideoFrameCallback(frame); };
         video.requestVideoFrameCallback(frame);
