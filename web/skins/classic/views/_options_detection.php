@@ -20,16 +20,12 @@ $canEdit = canEdit('System');
 
 define('ZM_DETECTION_DB', 'detector');
 
-$common = array('person', 'car', 'truck', 'bus', 'motorcycle', 'bicycle', 'boat', 'animal');
-$animals = array('bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe');
-$more = array('airplane', 'train', 'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench',
-  'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball', 'kite',
-  'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket', 'bottle', 'wine glass', 'cup',
-  'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog',
-  'pizza', 'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop',
-  'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'book',
-  'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush');
-$all = array_merge($common, $animals, $more);
+// The list is shared with the zone page's Live detection section (includes/detection_labels.php).
+require_once('includes/detection_labels.php');
+$common = detection_labels_common();
+$animals = detection_labels_animals();
+$more = detection_labels_more();
+$all = detection_labels_all();
 // Which objects may raise a camera's alarm, as the live sidecar reads detector_settings.alarm_on.
 $alarmChoices = array(
   'moving' => 'Moving objects only',

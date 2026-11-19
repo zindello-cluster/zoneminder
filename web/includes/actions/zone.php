@@ -57,6 +57,7 @@ if ( !empty($_REQUEST['mid']) && canEdit('Monitors', $_REQUEST['mid']) ) {
         dbQuery('UPDATE Zones SET '.implode(', ', $changes).' WHERE MonitorId=? AND Id=?', array($mid, $zid));
       } else {
         dbQuery('INSERT INTO Zones SET MonitorId=?, '.implode(', ', $changes), array($mid));
+        $zid = dbInsertId();  // zindello-cluster: the new zone's id, for its Live detection ticks
       }
       if ( daemonCheck() && ($monitor->Type() != 'WebSite') ) {
         $monitor->zmcControl('reload');
@@ -65,6 +66,10 @@ if ( !empty($_REQUEST['mid']) && canEdit('Monitors', $_REQUEST['mid']) ) {
         $monitor->sendControlCommand('quit');
       }
     } // end if changes
+    // zindello-cluster: the Live detection section's ticks, saved against the zone's id once
+    // ZoneMinder has saved the zone; they're never written to Zones (includes/zone_labels.php).
+    require_once('includes/zone_labels.php');
+    zone_labels_save($mid, $zid, $_REQUEST);
     # HTTP_REFERER will typically be ?view=zone so no good.
     # if a referer is passed in $_REQUEST then use it otherwise go to ?view=zones
     $redirect = isset($_REQUEST['REFERER']) ? $_REQUEST['REFERER'] : '?view=zones';

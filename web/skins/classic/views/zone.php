@@ -308,6 +308,8 @@ if ( count($other_zones) ) {
 								</tr>
 							</tbody>
 						</table>
+<?php // zindello-cluster: the Live detection section, the types live detection ignores in this zone ?>
+<?php include('_zone_detection.php'); ?>
 					</div>
       </form>
     </div><!--content-->
