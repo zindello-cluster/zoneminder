@@ -1475,7 +1475,8 @@ function liveStart() {
   monitorStream.stop();  // kills ZoneMinder's zms for this page; the last picture stays
   const cookie = getCookie('zmWatchShowBoxes' + monitorId);
   zmLive.boxes = cookie ? (cookie == '1') : null;  // null: the camera's default, from the first reply
-  zmLive.overlay = ZMDetections.overlay(img, {visible: zmLive.boxes !== false});
+  // fade: a missing object's box grey and fading, by its speed (detections.js), live only.
+  zmLive.overlay = ZMDetections.overlay(img, {visible: zmLive.boxes !== false, fade: true});
   zmLive.newest = 0;
   zmLive.on = true;
   zmLive.frames = 0;
