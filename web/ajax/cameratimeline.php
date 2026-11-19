@@ -196,15 +196,16 @@ if ($what == 'export') {
     // With boxes (cluster-docs docs/zoneminder-boxed-export.md; O486, O496, O501-O504): not made
     // here. The parts and live detection's boxes over them go in the folder, and the boxed exporter,
     // a pod of its own, starts a Job for it (one at a time) on the M4000, which leaves the file.
-    $settings = $detector ? dbFetchOne('SELECT per_second FROM `'.ZM_TIMELINE_DB.'`.detector_settings WHERE monitor_id=?', false, array($mid)) : null;
-    $interval = ($settings and intval($settings['per_second']) > 0) ? 1.0 / intval($settings['per_second']) : 0.2;
+    // The interval is the camera's Analysis FPS, and the boxes are those drawn: a box stored marked
+    // `ignored` (an Inactive zone's) and a frame left with none are left out (includes/
+    // detection_frames.php; cluster-docs O553, O564).
+    require_once('includes/detection_frames.php');
+    $interval = detection_interval($mid);
     $frames = array();
     if ($detector) {
-      foreach (dbFetchAll('SELECT TIMESTAMPDIFF(MICROSECOND, \'1970-01-01 00:00:00\', frame_time) AS us, boxes FROM `'.ZM_TIMELINE_DB.'`.detector_frames '.
+      $frames = detection_frames_shown(dbFetchAll('SELECT TIMESTAMPDIFF(MICROSECOND, \'1970-01-01 00:00:00\', frame_time) AS us, boxes FROM `'.ZM_TIMELINE_DB.'`.detector_frames '.
           'WHERE monitor_id=? AND frame_time >= ? AND frame_time < ? ORDER BY frame_time', false,
-          array($mid, timeline_utc($from - 2), timeline_utc($to + 1))) as $row) {
-        $frames[] = array('t' => intval($row['us']) / 1000000.0, 'boxes' => json_decode($row['boxes']));
-      }
+          array($mid, timeline_utc($from - 2), timeline_utc($to + 1))));
     }
     file_put_contents($dir.'/request.json', json_encode(array('width' => intval($Monitor->Width()), 'height' => intval($Monitor->Height()),
       'interval' => $interval, 'parts' => $request)));
