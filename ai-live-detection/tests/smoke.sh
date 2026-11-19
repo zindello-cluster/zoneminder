@@ -783,7 +783,8 @@ zone "$bee" Inactive '&liveDetection[labels][]=person'
 is "Inactive again: ignores what's ticked" '["person"]' "$(zl "$bee")"
 # Zones made elsewhere (the seed's "All", the API), with no row: every type, unless Inactive.
 q "INSERT INTO Zones (MonitorId, Name, Type, Units, NumCoords, Coords, Area, CheckMethod) VALUES (1, 'Elsewhere', 'Active', 'Pixels', 4, '0,0 639,0 639,479 0,479', 307200, 'Blobs'), (1, 'Elsewhere off', 'Inactive', 'Pixels', 4, '0,0 9,0 9,9 0,9', 100, 'Blobs')"
-has "an Active zone with no row: every type ticked" 'value="giraffe" checked="checked"/>' "$(upage admin "view=zone&mid=1&zid=$(q "SELECT Id FROM Zones WHERE Name='Elsewhere'")")"
+has "an Active zone with no row: every type ticked" 'value="toothbrush" checked="checked"/>' "$(upage admin "view=zone&mid=1&zid=$(q "SELECT Id FROM Zones WHERE Name='Elsewhere'")")"
+has "an Active zone with no row: the animals as \"animal\"" 'value="animal" checked="checked"/>' "$(upage admin "view=zone&mid=1&zid=$(q "SELECT Id FROM Zones WHERE Name='Elsewhere'")")"
 hasnt "an Inactive zone with no row: nothing ticked" 'value="[a-z ]*" checked' "$(upage admin "view=zone&mid=1&zid=$(q "SELECT Id FROM Zones WHERE Name='Elsewhere off'")")"
 q "DELETE FROM Zones WHERE Name LIKE 'Elsewhere%'"
 # Whoever may edit the camera, nobody else: viewer may only view it.
