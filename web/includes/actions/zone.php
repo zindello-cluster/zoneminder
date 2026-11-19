@@ -24,6 +24,14 @@ if ( !empty($_REQUEST['mid']) && canEdit('Monitors', $_REQUEST['mid']) ) {
   if ( ($action == 'zone') && isset($_REQUEST['zid']) ) {
     $zid = validInt($_REQUEST['zid']);
     $monitor = new ZM\Monitor($mid);
+    // zindello-cluster: an Inactive zone with no Live detection type ticked is refused before
+    // ZoneMinder saves anything, and the page says why (includes/zone_labels.php; cluster-docs O548).
+    require_once('includes/zone_labels.php');
+    if ( $refused = zone_labels_refusal($_REQUEST) ) {
+      global $error_message;
+      $error_message .= validHtmlStr($refused);
+      return;
+    }
 
     if ( !empty($zid) ) {
       $zone = dbFetchOne('SELECT * FROM Zones WHERE MonitorId=? AND Id=?', NULL, array($mid, $zid));
@@ -66,9 +74,8 @@ if ( !empty($_REQUEST['mid']) && canEdit('Monitors', $_REQUEST['mid']) ) {
         $monitor->sendControlCommand('quit');
       }
     } // end if changes
-    // zindello-cluster: the Live detection section's ticks, saved against the zone's id once
-    // ZoneMinder has saved the zone; they're never written to Zones (includes/zone_labels.php).
-    require_once('includes/zone_labels.php');
+    // zindello-cluster: the Live detection section's ticks and thresholds, saved against the zone's
+    // id once ZoneMinder has saved the zone; they're never written to Zones (includes/zone_labels.php).
     zone_labels_save($mid, $zid, $_REQUEST);
     # HTTP_REFERER will typically be ?view=zone so no good.
     # if a referer is passed in $_REQUEST then use it otherwise go to ?view=zones

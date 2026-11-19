@@ -14,7 +14,10 @@ function validateForm( form ) {
   if ( selfIntersecting ) {
     errors[errors.length] = selfIntersectingString;
   }
-  if ( form.elements['newZone[Type]'].value != 'Inactive' && form.elements['newZone[Type]'].value != 'Privacy' ) {
+  // zindello-cluster: live detection doesn't use the motion settings, so they aren't required
+  // (js/zone_detection.js); an Inactive zone needs a type ticked under Live detection.
+  if ( window.ZMZoneDetection ) errors = errors.concat(ZMZoneDetection.errors(form));
+  if ( form.elements['newZone[Type]'].value != 'Inactive' && form.elements['newZone[Type]'].value != 'Privacy' && !(window.ZMZoneDetection && ZMZoneDetection.motionUnused) ) {
     if ( !form.newAlarmRgbR.value || !form.newAlarmRgbG.value || !form.newAlarmRgbB.value ) {
       errors[errors.length] = alarmRGBUnsetString;
     }
@@ -76,10 +79,6 @@ function submitForm(form) {
 
 function applyZoneType() {
   var form = document.zoneForm;
-  // zindello-cluster: the Live detection section's ticks (views/_zone_detection.php) are for an
-  // Inactive zone only; for any other type they're greyed out, kept and ignored.
-  $j('.zoneDetectionLabel').prop('disabled', form.elements['newZone[Type]'].value != 'Inactive');
-  $j('.zoneDetectionOff').prop('disabled', true);
   if ( form.elements['newZone[Type]'].value == 'Inactive' || form.elements['newZone[Type]'].value == 'Privacy' ) {
     form.presetSelector.disabled = true;
     form.newAlarmRgbR.disabled = true;
@@ -127,6 +126,9 @@ function applyZoneType() {
     form.elements['newZone[ExtendAlarmFrames]'].disabled = true;
     applyCheckMethod();
   }
+  // zindello-cluster: the Live detection section's ticks and thresholds for this type, and the
+  // motion settings live detection doesn't use greyed out (js/zone_detection.js).
+  if ( window.ZMZoneDetection ) ZMZoneDetection.applyZoneType(form);
 }
 
 function applyCheckMethod() {
