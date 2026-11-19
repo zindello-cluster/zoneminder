@@ -74,7 +74,7 @@ Every change is marked `zindello-cluster` in a comment where it sits.
     Job.
 
 11. **Export with boxes** (cluster-docs `docs/zoneminder-boxed-export.md`; O486, O496,
-    O500-O503): the dialog's With boxes choice. The page doesn't make the file: it writes the
+    O501-O504): the dialog's With boxes choice. The page doesn't make the file: it writes the
     parts and live detection's boxes over them into the job's folder (`request.json`,
     `boxes.json`, then `boxed`), and the chart's boxed exporter, a pod of its own, starts a Job for
     it, one at a time, on the M4000, which leaves `out.mp4` there. The status says it's waiting

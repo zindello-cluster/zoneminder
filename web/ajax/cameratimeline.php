@@ -193,7 +193,7 @@ if ($what == 'export') {
   $name = preg_replace('/[^A-Za-z0-9 ._-]/', '', $Monitor->Name()).' '.date('Y-m-d H.i.s', intval($from)).' to '.date('H.i.s', intval($to)).'.mp4';
   file_put_contents($dir.'/name', $name);
   if ($boxed) {
-    // With boxes (cluster-docs docs/zoneminder-boxed-export.md; O486, O496, O500-O503): not made
+    // With boxes (cluster-docs docs/zoneminder-boxed-export.md; O486, O496, O501-O504): not made
     // here. The parts and live detection's boxes over them go in the folder, and the boxed exporter,
     // a pod of its own, starts a Job for it (one at a time) on the M4000, which leaves the file.
     $settings = $detector ? dbFetchOne('SELECT per_second FROM `'.ZM_TIMELINE_DB.'`.detector_settings WHERE monitor_id=?', false, array($mid)) : null;
