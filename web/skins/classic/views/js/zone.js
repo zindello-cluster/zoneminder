@@ -76,6 +76,10 @@ function submitForm(form) {
 
 function applyZoneType() {
   var form = document.zoneForm;
+  // zindello-cluster: the Live detection section's ticks (views/_zone_detection.php) are for an
+  // Inactive zone only; for any other type they're greyed out, kept and ignored.
+  $j('.zoneDetectionLabel').prop('disabled', form.elements['newZone[Type]'].value != 'Inactive');
+  $j('.zoneDetectionOff').prop('disabled', true);
   if ( form.elements['newZone[Type]'].value == 'Inactive' || form.elements['newZone[Type]'].value == 'Privacy' ) {
     form.presetSelector.disabled = true;
     form.newAlarmRgbR.disabled = true;

@@ -668,4 +668,80 @@ refused=$(upage admin 'view=request&request=camerasettings&action=read&mid=1')
 has "a refused login is said" 'refused its login (it says 9 tries are left of 10)' "$refused"
 is "and tried once only" 1 "$(vigi | jq .refused)"
 
+# ---- Areas live detection ignores (cluster-docs docs/zoneminder-detection-exclusions.md; O523-O535):
+# the zone page's Live detection section, its ticks saved by the page's own Save into
+# detector.detector_zone_labels, for an Inactive zone, by whoever may edit the camera; ZoneMinder's
+# Zones row as it was after a Save of ticks alone; and the zones API answering as before (O492).
+zl() { q "SELECT labels FROM detector.detector_zone_labels WHERE zone_id=$1"; }
+zrow() { q "SELECT * FROM Zones WHERE Id=$1"; }
+page=$(upage admin 'view=zone&mid=1&zid=0')
+has "the zone page's Live detection section" 'id="zoneDetection"' "$page"
+has "its ticks, the Looks for list" 'name="liveDetection\[labels\]\[\]" value="person" disabled' "$page"
+has "its ticks, More" 'name="liveDetection\[labels\]\[\]" value="toothbrush" disabled' "$page"
+has "without the table: greyed out until ZoneMinder's next start" "Can be set after ZoneMinder's next start." "$page"
+has "applyZoneType enables the ticks for Inactive only" "\$j('.zoneDetectionLabel').prop('disabled', form.elements\['newZone\[Type\]'\].value != 'Inactive')" \
+  "$(docker exec "$name" cat /usr/share/zoneminder/www/skins/classic/views/js/zone.js)"
+# The table as the chart's seed makes it (deploy/live/schema.sql there).
+sql detector -e "CREATE TABLE IF NOT EXISTS detector_zone_labels (zone_id INT UNSIGNED NOT NULL PRIMARY KEY, labels JSON NOT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+page=$(upage admin 'view=zone&mid=1&zid=0')
+has "a new zone ignores nothing, and says so" 'Nothing is ignored here until a type is ticked.' "$page"
+hasnt "a new zone: nothing ticked" 'name="liveDetection\[labels\]\[\]" value="[a-z ]*" checked' "$page"
+# A new Inactive zone round the bee, person and animal ticked, by the page's Save: the fields the
+# page posts for an Inactive zone, as a browser sends them (applyCheckMethod leaves the filter and
+# blob boxes enabled, and empty).
+zone() { # <zid> <type> [extra form data]
+  upost admin 'view=zone' "view=zone&action=zone&mid=1&zid=$1&newZone[Name]=Bee&newZone[Type]=$2&newZone[Units]=Pixels&newZone[NumCoords]=4&newZone[Coords]=400,100 500,100 500,220 400,220&newZone[Area]=12000&newZone[AlarmRGB]=16711680&newZone[FilterX]=&newZone[FilterY]=&newZone[MinFilterPixels]=&newZone[MaxFilterPixels]=&newZone[MinBlobPixels]=&newZone[MaxBlobPixels]=&newZone[MinBlobs]=&newZone[MaxBlobs]=&liveDetection[shown]=1${3:-}" >/dev/null
+}
+zone 0 Inactive '&liveDetection[labels][]=person&liveDetection[labels][]=animal'
+bee=$(q "SELECT Id FROM Zones WHERE MonitorId=1 AND Name='Bee'")
+test -n "$bee" || fail "the new zone wasn't saved"
+is "the new zone is ZoneMinder's own, Inactive" "Inactive 400,100 500,100 500,220 400,220" "$(q "SELECT CONCAT(Type, ' ', Coords) FROM Zones WHERE Id=$bee")"
+is "its ticks saved against its new id, animal as the ten" '["bear","bird","cat","cow","dog","elephant","giraffe","horse","person","sheep","zebra"]' "$(zl "$bee")"
+page=$(upage admin "view=zone&mid=1&zid=$bee")
+has "the page shows person ticked" 'name="liveDetection\[labels\]\[\]" value="person" checked' "$page"
+has "the page shows animal ticked" 'name="liveDetection\[labels\]\[\]" value="animal" checked' "$page"
+hasnt "and doesn't say nothing is ignored" 'Nothing is ignored here until' "$page"
+# The ticks alone: the same zone, person only. ZoneMinder's row is as it was (its own Save still
+# reloads the camera: it counts the empty boxes as changes to their NULL columns).
+before=$(zrow "$bee")
+zone "$bee" Inactive '&liveDetection[labels][]=person'
+is "ticks alone: ZoneMinder's Zones row as it was" "$before" "$(zrow "$bee")"
+is "ticks alone: saved" '["person"]' "$(zl "$bee")"
+# Another type: the ticks aren't sent (greyed out); they're kept, and in force again once Inactive.
+zone "$bee" Active
+is "another type: ZoneMinder saves the zone as before" Active "$(q "SELECT Type FROM Zones WHERE Id=$bee")"
+is "another type: the ticks kept" '["person"]' "$(zl "$bee")"
+zone "$bee" Inactive '&liveDetection[labels][]=person&liveDetection[labels][]=bird'
+is "Inactive again: ticked as saved" '["bird","person"]' "$(zl "$bee" | tr -d ' ')"
+zone "$bee" Inactive
+is "nothing ticked: nothing ignored, the row gone" '' "$(zl "$bee")"
+zone "$bee" Inactive '&liveDetection[labels][]=person&liveDetection[labels][]=unicorn'
+is "a type the list doesn't offer is left out" '["person"]' "$(zl "$bee")"
+# Whoever may edit the camera, nobody else: viewer may only view it.
+before=$(zrow "$bee")
+has "the zone page refused to viewer, as ZoneMinder refuses it" 'view=error\|Error\|error' "$(upage viewer "view=zone&mid=1&zid=$bee")"
+hasnt "no Live detection section for viewer" 'id="zoneDetection"' "$(upage viewer "view=zone&mid=1&zid=$bee")"
+csrf=$(upage viewer 'view=eventserver' | sed -n 's/.*csrfMagicToken = "\([^"]*\)".*/\1/p' | head -1)
+docker exec "$name" curl -s -o /dev/null -c /tmp/viewer.jar -b /tmp/viewer.jar --data-urlencode "__csrf_magic=$csrf" \
+  -d "view=zone&action=zone&mid=1&zid=$bee&newZone[Name]=Bee&newZone[Type]=Inactive&liveDetection[shown]=1&liveDetection[labels][]=car" \
+  'http://127.0.0.1/zm/index.php?view=zone'
+is "viewer's Save changes nothing" '["person"]' "$(zl "$bee")"
+# A zone of another camera, through this camera's page: nothing.
+upost admin 'view=zone' "view=zone&action=zone&mid=2&zid=$bee&newZone[Name]=Bee&newZone[Type]=Inactive&liveDetection[shown]=1&liveDetection[labels][]=car" >/dev/null
+is "another camera's zone isn't this camera's to tick" '["person"]' "$(zl "$bee")"
+is "nor is ZoneMinder's row changed" "$before" "$(zrow "$bee")"
+# zmNinjaNG 2.8.0's zones call (app/src/api/zones.ts): as before, the area an ordinary Inactive zone.
+napi "$vtok" 'zones.json?MonitorId=1'
+is "the app's zones call: 200" 200 "$code"
+is "the app's zones call: each zone's keys are the Zones table's" \
+  "$(q "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY COLUMN_NAME) FROM information_schema.columns WHERE TABLE_SCHEMA='zm' AND TABLE_NAME='Zones'")" \
+  "$(printf '%s' "$body" | jq -r '[.zones[0].Zone | keys[]] | sort | join(",")')"
+is "the app's zones call: the area, Inactive" Inactive "$(printf '%s' "$body" | jq -r ".zones[] | .Zone | select(.Id == $bee or .Id == \"$bee\") | .Type")"
+# Deleted on the Zones page, as any zone: gone from ZoneMinder; its ticks are left for the chart's
+# seed to remove at the next start (the live sidecar ignores them meanwhile).
+upost admin 'view=zones' "view=zones&action=delete&mid=1&markZids[]=$bee" >/dev/null
+is "deleted on the Zones page" 0 "$(q "SELECT COUNT(*) FROM Zones WHERE Id=$bee")"
+is "its ticks left for the seed" '["person"]' "$(zl "$bee")"
+
 echo "smoke test passed"

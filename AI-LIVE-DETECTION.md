@@ -92,6 +92,26 @@ Every change is marked `zindello-cluster` in a comment where it sits.
     `css/base/camerasettings.css`; the tab in `views/monitor.php`). Its smoke test talks to a fake
     VIGI (`tests/fake_vigi.py`).
 
+13. **Areas live detection ignores** (cluster-docs `docs/zoneminder-detection-exclusions.md`;
+    O523-O535; the owner, 19 November 2026: "map OUT this area where the decoative bee on the wall
+    thinks it's a human"): an area is an ordinary ZoneMinder zone of type Inactive, drawn on
+    ZoneMinder's own zone page; a **Live detection** section on that page ticks the types live
+    detection ignores there, from the Detection tab's Looks for list, saved by the page's own Save
+    into the `detector` database's `detector_zone_labels`. The ticks are enabled only for an
+    Inactive zone, by ZoneMinder's own `applyZoneType`; a zone of another type keeps its ticks,
+    greyed out and ignored. The ticks are never written to ZoneMinder's `Zones`. ZoneMinder's own
+    Save reloads the camera's capture as it always has: for an Inactive zone that's every Save,
+    ticks alone included, since the page sends the greyed-out motion settings' empty boxes, which
+    ZoneMinder counts as changes to their empty (NULL) columns. Whoever may edit the camera, as for
+    any zone. Three of upstream's files carry a hunk each: `views/zone.php` (the
+    section, `views/_zone_detection.php`), `views/js/zone.js` (`applyZoneType`) and
+    `includes/actions/zone.php` (saving the ticks, `includes/zone_labels.php`, after ZoneMinder
+    has saved the zone, against its id, a new zone's too). The Looks for list is one file,
+    `includes/detection_labels.php`, shared with the Detection tab. The API is unchanged: an area
+    is an Inactive zone in a camera's zones list. The live sidecar (external-security.zindello.com.au,
+    `docs/live-detection.md`, "Areas it ignores") drops a box lying entirely inside an area that
+    lists its type.
+
 `git log $(cat ai-live-detection/UPSTREAM_RELEASE)..ai-live-detection -- web` lists them.
 
 ## The branches
@@ -118,8 +138,11 @@ each sees and sets only their own, the admin another's only with the tick, Back 
 Remove, and bad input refused. Then the Alerts list: each user's own alerts in the list and the API,
 All Events and `show=all`, the rules now, a hand-added tag and the old hook's not counting, and
 zmNinjaNG 2.8.0's own calls replayed (its list, timeline, tag filter, badges, next and previous,
-opening an event by id as a push does): each answers 200 with the app's keys, only fewer events. A pull request into the
-branch runs the same, without pushing.
+opening an event by id as a push does): each answers 200 with the app's keys, only fewer events. Then
+the zone page's Live detection section: its ticks saved with a new zone and an existing one,
+enabled only for Inactive, ticks alone leaving ZoneMinder's `Zones` row as it was, refused to a
+user who can't edit the camera, and the app's zones call answering as before. A pull request into
+the branch runs the same, without pushing.
 
 The digest is in the run's summary. `external-security.zindello.com.au` pins it; a pull request
 there moves it, and the owner merges and syncs it. The image is private on GHCR.
