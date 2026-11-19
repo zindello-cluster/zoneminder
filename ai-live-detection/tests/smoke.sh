@@ -727,7 +727,8 @@ has "a new zone: More's too" 'value="toothbrush" checked="checked"/>' "$page"
 # The ten animals are ticked as "animal" (detection_labels_ticked), as on the Detection tab; their
 # own ticks under More stay as they are, as there.
 hasnt "a new zone: nothing unticked but the animals' own" 'name="liveDetection\[labels\]\[\]" value="[a-z ]*"/>' \
-  "$(printf '%s' "$page" | grep -vE 'value="(bird|cat|dog|horse|sheep|cow|elephant|bear|zebra|giraffe)"/>')"
+  "$(printf '%s' "$page" | grep -o 'name="liveDetection\[labels\]\[\]" value="[a-z ]*"[^/]*/>' \
+     | grep -vE 'value="(bird|cat|dog|horse|sheep|cow|elephant|bear|zebra|giraffe)"')"
 has "a new zone: animal ticked" 'value="animal" checked="checked"/>' "$page"
 has "a new Active zone: its own threshold per type, blank for the camera's" 'name="liveDetection\[thresholds\]\[person\]" min="0.30" max="0.95" step="0.05" value="" placeholder="0.60"' "$page"
 has "what the ticks mean on an Active zone" 'Only these types raise, join or hold an alarm here' "$page"
