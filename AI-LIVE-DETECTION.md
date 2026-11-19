@@ -27,9 +27,9 @@ Every change is marked `zindello-cluster` in a comment where it sits.
    frames". The rule and the measurements behind it are external-security.zindello.com.au's
    `docs/live-detection.md`, "Live: matched by frame stamp"; the dash's cameras page and the
    wall's boxed stream follow it too.
-4. **The Detection tab in Options,** per camera: live on or off, what to look for, the confidence,
-   the frames a second, boxes shown, which objects may raise an alarm (`views/options.php`, `views/_options_detection.php`, the tab
-   list in `includes/functions.php`).
+4. **The Detection tab in Options,** per camera: live on or off, what to look for, a threshold and
+   a hold per type (item 14), boxes shown, which objects may raise an alarm (`views/options.php`,
+   `views/_options_detection.php`, the tab list in `includes/functions.php`).
 5. **The Object filter on the events list** (`views/events.php`, `views/js/events.js`,
    `ajax/events.php`).
 6. **The Event Server page and its menu item,** alert rules per user, per camera, per type
@@ -110,7 +110,39 @@ Every change is marked `zindello-cluster` in a comment where it sits.
     `includes/detection_labels.php`, shared with the Detection tab. The API is unchanged: an area
     is an Inactive zone in a camera's zones list. The live sidecar (external-security.zindello.com.au,
     `docs/live-detection.md`, "Areas it ignores") drops a box lying entirely inside an area that
-    lists its type.
+    lists its type. Item 14 takes the ticks to every zone type.
+14. **ZoneMinder's zones in live detection** (cluster-docs
+    `docs/zoneminder-zones-for-live-detection.md`; O544-O570; the owner, 20 November 2026: "If
+    this is going to be a REPLACEMENT for zoneminders detection it needs to hand ALL THE CURRENT
+    FEATURES of the dropped detection and then ADD our additional features."):
+    - **The zone page:** the Live detection ticks on every zone type but Privacy: "only these
+      types" on Active, Inclusive, Exclusive and Preclusive zones, "ignore these" on Inactive ones,
+      the page saying which. A new zone starts with every type ticked; a zone with no row reads as
+      every type, or nothing if it's Inactive, as the live sidecar reads it; a zone that alarms
+      with nothing ticked is kept as `[]`. An Inactive zone with nothing ticked is refused, in the
+      page and again before ZoneMinder's own Save writes anything. Beside each tick, the zone's
+      own threshold for that type (blank: the camera's, shown as the placeholder), on Active,
+      Inclusive and Exclusive zones, in `detector_zone_labels.thresholds`. ZoneMinder's motion
+      settings (Preset, Alarm Colour, Alarm Check Method and the pixel settings) are greyed out
+      for every type and no longer required: read-only and out of reach, not disabled, so
+      ZoneMinder's own enabling still decides what's posted and a Save keeps them as they were.
+      Extend Alarm Frames stays for a Preclusive zone. `js/zone_detection.js` (new), called from
+      `views/js/zone.js` (`applyZoneType`, `validateForm`); `includes/actions/zone.php` (the
+      refusal); `includes/zone_labels.php`, `views/_zone_detection.php`.
+    - **The monitor page:** Analysis FPS is live detection's rate and Alarm Frame Count its samples
+      in a row, each saying so; Analysis Image, the reference blends and Warmup Frames greyed out
+      (`views/_monitor_live_detection.php`, new, one line in `views/monitor.php`).
+    - **The Detection tab:** a threshold and a hold per type in place of Confidence, 0.60 and 0.40
+      until set; no Frames a second (the camera's Analysis FPS). `min_confidence` and `per_second`
+      are no longer read or written.
+    - **The boxes:** a box stored marked `ignored` (an Inactive zone's) is never sent to be drawn
+      or exported, nor a frame left with none, and the interval is the camera's Analysis FPS
+      (`includes/detection_frames.php`, new, used by `ajax/detections.php` and
+      `ajax/cameratimeline.php`). The object that raised the alarm (`alarm: true`) is drawn on
+      that frame bold, striped black and yellow, its tag in its type's colour (`drawBox`,
+      `stripeTile` in `js/detections.js`; tested in `tests/detections.test.js`).
+    - **Not here:** ZoneMinder applying Alarm Frame Count a second time to the trigger
+      (`src/zm_monitor.cpp`): this image compiles nothing, so that stays as upstream has it.
 
 `git log $(cat ai-live-detection/UPSTREAM_RELEASE)..ai-live-detection -- web` lists them.
 
@@ -139,9 +171,12 @@ Remove, and bad input refused. Then the Alerts list: each user's own alerts in t
 All Events and `show=all`, the rules now, a hand-added tag and the old hook's not counting, and
 zmNinjaNG 2.8.0's own calls replayed (its list, timeline, tag filter, badges, next and previous,
 opening an event by id as a push does): each answers 200 with the app's keys, only fewer events. Then
-the zone page's Live detection section: its ticks saved with a new zone and an existing one,
-enabled only for Inactive, ticks alone leaving ZoneMinder's `Zones` row as it was, refused to a
-user who can't edit the camera, and the app's zones call answering as before. A pull request into
+the zone page's Live detection section: its ticks saved with a new zone and an existing one, on
+every type, every type ticked on a new zone, an Inactive zone with nothing ticked refused, a zone's
+own thresholds, ZoneMinder's motion settings not required, ticks alone leaving ZoneMinder's `Zones`
+row as it was, refused to a user who can't edit the camera, and the app's zones call answering as
+before; the Detection tab's thresholds and holds; the monitor page's lines; the boxes and the boxed
+export without the Inactive zones' boxes, at the camera's Analysis FPS. A pull request into
 the branch runs the same, without pushing.
 
 The digest is in the run's summary. `external-security.zindello.com.au` pins it; a pull request
