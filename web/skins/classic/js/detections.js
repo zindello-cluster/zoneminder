@@ -21,6 +21,16 @@
  * by time at the camera's rate: the time between two frames over the sampling interval, rounded.
  * The same rule as the dash's cameras page and the wall's boxed stream.
  *
+ * The object that raised an alarm (its box stored with `alarm: true`, in the row of the sample that
+ * raised it) is drawn on that frame with a bold black-and-yellow striped outline, three times the
+ * line, its stripes at 45 degrees and twice the line wide; its tag stays in its type's colour
+ * (cluster-docs docs/zoneminder-zones-for-live-detection.md; the owner, 20 November 2026: "Colour by
+ * type AND add a Bold Black/Yellow angle striped box around the alarming object for the alarm
+ * frame.", O558; "Actually, just draw them anywhere boxes are enabled (including the dash).",
+ * O565: no off switch). Its fading copy, if it goes missing, is the ordinary grey one. The same
+ * drawing as the dash's cameras page, the wall's boxed stream, the boxed export and the alarm
+ * picture.
+ *
  * ZMDetections.readStream(url, onFrame, signal) reads ZoneMinder's MJPEG stream (nph-zms,
  * mode=jpeg) with fetch(), splits it into frames and gives each one with its X-Timestamp header:
  * the frame's capture stamp, the very value the live sidecar stores (cluster-docs T150).
@@ -38,6 +48,62 @@ var ZMDetections = (function() {
   var FADE = 5;            // samples a missing tracked object's box stays at most, grey and fading
   var SPEED_STEP = 0.05;   // one sample less for each this much of its size it moved a sample
   var FADED = '#8e8e93';   // the grey it's drawn in
+  var ALARM_YELLOW = '#ffcc00';  // the alarming object's stripes, with black
+  var ALARM_BLACK = '#000000';
+
+  // The alarming object's outline for a normal line of `line` pixels: three times as wide, its
+  // stripes twice the line wide along it.
+  function alarmStyle(line) {
+    return {width: 3 * line, stripe: 2 * line, colours: [ALARM_YELLOW, ALARM_BLACK]};
+  }
+
+  // One tile of the stripes, drawn on `tile` (a canvas): 2 stripes square, black, with a yellow
+  // band along each x + y = k * size, as wide across as a stripe is along the outline, so the tile
+  // repeats seamlessly into 45-degree stripes, half yellow and half black.
+  function stripeTile(tile, line) {
+    var a = alarmStyle(line);
+    var size = 2 * a.stripe;
+    tile.width = size;
+    tile.height = size;
+    var t = tile.getContext('2d');
+    t.fillStyle = ALARM_BLACK;
+    t.fillRect(0, 0, size, size);
+    t.strokeStyle = ALARM_YELLOW;
+    t.lineWidth = a.stripe / Math.SQRT2;
+    t.lineCap = 'square';
+    t.beginPath();
+    for (var k = 0; k <= 2; k++) {
+      t.moveTo(k * size + a.stripe, -a.stripe);
+      t.lineTo(k * size - size - a.stripe, size + a.stripe);
+    }
+    t.stroke();
+    return tile;
+  }
+
+  // One box on a W x H canvas: its outline (its type's colour; grey if fading; striped if it's the
+  // alarming object) and its tag, "person 87%", in its type's colour (grey if fading). `stripes`
+  // is the canvas pattern of stripeTile, made once per line width.
+  function drawBox(ctx, b, W, H, line, font, fading, stripes) {
+    var x = b.box[0] * W, y = b.box[1] * H, w = (b.box[2] - b.box[0]) * W, h = (b.box[3] - b.box[1]) * H;
+    var colour = fading ? FADED : (COLOURS[b.label] || '#ffffff');
+    ctx.globalAlpha = fading ? b.fade : 1;
+    if (!fading && b.alarm && stripes) {
+      ctx.lineWidth = alarmStyle(line).width;
+      ctx.strokeStyle = stripes;
+    } else {
+      ctx.lineWidth = line;
+      ctx.strokeStyle = colour;
+    }
+    ctx.strokeRect(x, y, w, h);
+    ctx.lineWidth = line;
+    var text = shown(b.label) + ' ' + Math.round(b.confidence * 100) + '%';
+    var tw = ctx.measureText(text).width + 8;
+    var ty = y - font - 6 >= 0 ? y - font - 6 : y;
+    ctx.fillStyle = colour;
+    ctx.fillRect(x, ty, tw, font + 6);
+    ctx.fillStyle = '#000000';
+    ctx.fillText(text, x + 4, ty + 3);
+  }
 
   function shown(label) {
     return ANIMALS[label] ? 'animal' : label;
@@ -179,20 +245,19 @@ var ZMDetections = (function() {
       // The fading boxes first, under the others.
       var fading = (o.fade && frame.fading) || [];
       var boxes = fading.concat(frame.boxes);
+      // The alarming object's stripes, made once for this line width.
+      var stripes = null;
+      for (var a = 0; a < frame.boxes.length; a++) {
+        if (!frame.boxes[a].alarm) continue;
+        if (o.stripesLine !== line) {
+          o.stripes = ctx.createPattern(stripeTile(document.createElement('canvas'), line), 'repeat');
+          o.stripesLine = line;
+        }
+        stripes = o.stripes;
+        break;
+      }
       for (var i = 0; i < boxes.length; i++) {
-        var b = boxes[i];
-        var x = b.box[0] * W, y = b.box[1] * H, w = (b.box[2] - b.box[0]) * W, h = (b.box[3] - b.box[1]) * H;
-        var colour = i < fading.length ? FADED : (COLOURS[b.label] || '#ffffff');
-        ctx.globalAlpha = i < fading.length ? b.fade : 1;
-        ctx.strokeStyle = colour;
-        ctx.strokeRect(x, y, w, h);
-        var text = shown(b.label) + ' ' + Math.round(b.confidence * 100) + '%';
-        var tw = ctx.measureText(text).width + 8;
-        var ty = y - font - 6 >= 0 ? y - font - 6 : y;
-        ctx.fillStyle = colour;
-        ctx.fillRect(x, ty, tw, font + 6);
-        ctx.fillStyle = '#000000';
-        ctx.fillText(text, x + 4, ty + 3);
+        drawBox(ctx, boxes[i], W, H, line, font, i < fading.length, stripes);
       }
       ctx.globalAlpha = 1;
       o.lastDrawn = frame;
@@ -273,7 +338,9 @@ var ZMDetections = (function() {
   }
 
   return {overlay: overlay, readStream: readStream, shown: shown, fadingFor: fadingFor, holdOf: holdOf,
-          COLOURS: COLOURS, FADE: FADE, SPEED_STEP: SPEED_STEP, FADED: FADED};
+          drawBox: drawBox, alarmStyle: alarmStyle, stripeTile: stripeTile,
+          COLOURS: COLOURS, FADE: FADE, SPEED_STEP: SPEED_STEP, FADED: FADED,
+          ALARM_YELLOW: ALARM_YELLOW, ALARM_BLACK: ALARM_BLACK};
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = ZMDetections;

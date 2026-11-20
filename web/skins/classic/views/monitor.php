@@ -1699,6 +1699,7 @@ echo htmlSelect('newMonitor[ReturnLocation]', $return_options, $monitor->ReturnL
     <h2 class="alert-heading"><?php echo translate('PleaseWait') ?></h2>
     <?php echo translate('MonitorDataIsSaved') ?>
   </div>
+<?php include('_monitor_live_detection.php'); // zindello-cluster: what live detection uses on this page ?>
 
   <script src="<?php echo cache_bust('js/MonitorLinkExpression.js') ?>"></script>
 <script type="module" nonce="<?php echo $cspNonce ?>">

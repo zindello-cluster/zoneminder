@@ -10,32 +10,32 @@
 // permission checks as the video it goes with: the event's canView, the camera's canView. The rows
 // come from the `detector` database beside ZoneMinder's, written by the live sidecar; their times
 // are UTC DATETIME(6), turned into seconds since the epoch by arithmetic, so no session time zone
-// touches them. A frame with no row had no boxes.
+// touches them. A frame with no row had no boxes. A box stored marked `ignored` (wholly inside an
+// Inactive zone that lists its type) is never drawn, so it's left out here, and a frame with nothing
+// left is left out too (includes/detection_frames.php; cluster-docs O564). The sampling interval is
+// the camera's Analysis FPS (O553).
 //
 ini_set('display_errors', '');
 
 require_once('includes/Event.php');
 require_once('includes/Monitor.php');
+require_once('includes/detection_frames.php');
 
 define('ZM_DETECTIONS_DB', 'detector');
 define('ZM_DETECTIONS_MAX_FRAMES', 20000);
 
 function detections_settings($monitor_id) {
-  $row = dbFetchOne('SELECT per_second, boxes_default, live FROM `'.ZM_DETECTIONS_DB.'`.detector_settings WHERE monitor_id=?', false, array($monitor_id));
+  $row = dbFetchOne('SELECT boxes_default, live FROM `'.ZM_DETECTIONS_DB.'`.detector_settings WHERE monitor_id=?', false, array($monitor_id));
   return array(
-    'interval'      => ($row and $row['per_second'] > 0) ? 1.0 / intval($row['per_second']) : 0.2,
+    'interval'      => detection_interval($monitor_id),
     'boxes_default' => $row ? (bool)$row['boxes_default'] : true,
     'live'          => $row ? (bool)$row['live'] : false,
   );
 }
 
-// Rows as [{t: seconds since the epoch (float), boxes: [...]}], oldest first.
+// Rows as [{t: seconds since the epoch (float), boxes: [...]}], oldest first, only the boxes drawn.
 function detections_frames($sql, $params) {
-  $frames = array();
-  foreach (dbFetchAll($sql, false, $params) as $row) {
-    $frames[] = array('t' => intval($row['us']) / 1000000.0, 'boxes' => json_decode($row['boxes']));
-  }
-  return $frames;
+  return detection_frames_shown(dbFetchAll($sql, false, $params));
 }
 
 // A ZoneMinder local-time DATETIME (whole seconds, or with a fraction once the seed has widened

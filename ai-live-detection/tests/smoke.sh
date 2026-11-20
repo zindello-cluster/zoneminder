@@ -96,6 +96,29 @@ must "the boxes request: live" '"interval":0.2' 'view=request&request=detections
 must "the Object filter finds the event" '"Id":"\?1"\?[,}]' 'view=request&request=events&task=query&object=person'
 if page 'view=request&request=events&task=query&object=car' | grep -q '"Id":"\?1"\?[,}]'; then echo "the Object filter let a car through" >&2; exit 1; fi
 echo "ok: the Object filter keeps the event out for an object it hasn't got"
+# Live detection's zones (cluster-docs docs/zoneminder-zones-for-live-detection.md; O553, O558, O564,
+# O570): a box stored marked `ignored` (an Inactive zone's) is never sent to be drawn, and a frame
+# left with none isn't sent at all; the alarming object's mark is; the interval is the camera's
+# Analysis FPS (empty: 5 a second).
+sql detector <<'EOF2'
+INSERT INTO detector_frames VALUES (1, '2026-11-12 00:26:40.600000', 16, '[{"label":"person","confidence":0.7,"box":[0.6,0.1,0.7,0.3],"ignored":7},{"label":"person","confidence":0.91,"box":[0.14,0.1,0.34,0.6],"track":1,"alarm":true}]'),
+  (1, '2026-11-12 00:26:40.800000', 19, '[{"label":"person","confidence":0.72,"box":[0.6,0.1,0.7,0.3],"ignored":7}]');
+EOF2
+ev=$(page 'view=request&request=detections&what=event&eid=1')
+if [ "$(printf '%s' "$ev" | jq '.frames | length')" != 3 ]; then printf '%s\n' "$ev" >&2; echo "MISSING: the frame with only an Inactive zone's box left out (3 frames)" >&2; exit 1; fi
+echo "ok: a frame with only an Inactive zone's box isn't sent"
+if printf '%s' "$ev" | grep -q '"ignored"'; then echo "an Inactive zone's box was sent to be drawn" >&2; exit 1; fi
+echo "ok: an Inactive zone's box isn't sent to be drawn"
+if [ "$(printf '%s' "$ev" | jq -c '[.frames[2].boxes[] | [.track, .alarm]]')" != '[[1,true]]' ]; then printf '%s\n' "$ev" >&2; echo "MISSING: the alarming object's mark, beside it" >&2; exit 1; fi
+echo "ok: the alarming object's mark is sent, and the box beside it in that frame"
+live=$(page 'view=request&request=detections&what=live&mid=1&since=1794443200.5')
+if [ "$(printf '%s' "$live" | jq -c '[.frames[].boxes | length]')" != '[1]' ]; then printf '%s\n' "$live" >&2; echo "MISSING: live: the Inactive zone's boxes left out" >&2; exit 1; fi
+echo "ok: live: the Inactive zone's boxes left out, and their frame"
+sql zm -e "UPDATE Monitors SET AnalysisFPSLimit=2 WHERE Id=1"
+must "the boxes request: the interval is the camera's Analysis FPS" '"interval":0.5' 'view=request&request=detections&what=live&mid=1&since=1794443200'
+must "the event's too" '"interval":0.5' 'view=request&request=detections&what=event&eid=1'
+sql zm -e "UPDATE Monitors SET AnalysisFPSLimit=NULL WHERE Id=1"
+must "an empty Analysis FPS: 5 a second" '"interval":0.2' 'view=request&request=detections&what=live&mid=1&since=1794443200'
 # A detector table from before alarm_on (the chart's seed adds it at ZoneMinder's next start): the
 # tab still shows, the choice greyed out.
 sql detector -e "ALTER TABLE detector_settings DROP COLUMN alarm_on"
@@ -605,7 +628,9 @@ has "the timeline's Export" 'id="tlExport"' "$(upage admin 'view=cameratimeline&
 # ---- With boxes (cluster-docs docs/zoneminder-boxed-export.md; O486, O496, O501-O504): the page
 # writes the parts and live detection's boxes for the boxed exporter's Job, and waits its turn.
 sql detector -e "INSERT INTO detector_frames VALUES (1, '2026-11-18 07:00:40.000000', 1, '[{\"label\":\"person\",\"confidence\":0.87,\"box\":[0.25,0.25,0.75,0.75],\"track\":1}]'),
-  (1, '2026-11-18 07:00:40.200000', 2, '[{\"label\":\"person\",\"confidence\":0.88,\"box\":[0.26,0.25,0.76,0.75],\"track\":1}]')"
+  (1, '2026-11-18 07:00:40.200000', 2, '[{\"label\":\"person\",\"confidence\":0.88,\"box\":[0.26,0.25,0.76,0.75],\"track\":1},{\"label\":\"person\",\"confidence\":0.7,\"box\":[0.8,0.1,0.9,0.3],\"ignored\":7}]'),
+  (1, '2026-11-18 07:00:40.400000', 3, '[{\"label\":\"person\",\"confidence\":0.7,\"box\":[0.8,0.1,0.9,0.3],\"ignored\":7}]')"
+q "UPDATE Monitors SET AnalysisFPSLimit=4 WHERE Id=1"
 job=$(upage admin "view=request&request=cameratimeline&what=export&mid=1&from=$((t0 + 30))&to=$((t0 + 330))&boxes=1" | jq -r '.job // empty')
 test -n "$job" || fail "the boxed export didn't start"
 dir=/var/tmp/zm/timeline/$job
@@ -616,6 +641,9 @@ is "its request: the parts, 101's last 31 s and 102's first 30 s" "101:30:61 102
   "$(printf '%s' "$req" | jq -r '[.parts[] | "\(.file|capture("/(?<e>[0-9]+)-video").e):\(.in|round):\(.out|round)"] | join(" ")')"
 is "its request: each part from its section's first frame" "$t0" "$(printf '%s' "$req" | jq -r '.parts[0].start|floor')"
 is "its boxes: live detection's frames in the part" 2 "$(docker exec "$name" cat "$dir/boxes.json" | jq '.frames|length')"
+hasnt "its boxes: never an Inactive zone's (O564)" '"ignored"' "$(docker exec "$name" cat "$dir/boxes.json")"
+is "its interval: the camera's Analysis FPS" 0.25 "$(printf '%s' "$req" | jq -r '.interval')"
+q "UPDATE Monitors SET AnalysisFPSLimit=NULL WHERE Id=1"
 is "nothing made in ZoneMinder's pod" no "$(docker exec "$name" sh -c "test -e $dir/out.part -o -e $dir/out.mp4 && echo yes || echo no")"
 # The exporter starts its Job; the Job leaves the file.
 docker exec "$name" sh -c "touch $dir/started"
@@ -668,25 +696,48 @@ refused=$(upage admin 'view=request&request=camerasettings&action=read&mid=1')
 has "a refused login is said" 'refused its login (it says 9 tries are left of 10)' "$refused"
 is "and tried once only" 1 "$(vigi | jq .refused)"
 
-# ---- Areas live detection ignores (cluster-docs docs/zoneminder-detection-exclusions.md; O523-O535):
-# the zone page's Live detection section, its ticks saved by the page's own Save into
-# detector.detector_zone_labels, for an Inactive zone, by whoever may edit the camera; ZoneMinder's
-# Zones row as it was after a Save of ticks alone; and the zones API answering as before (O492).
-zl() { q "SELECT labels FROM detector.detector_zone_labels WHERE zone_id=$1"; }
+# ---- Live detection's types per zone (cluster-docs docs/zoneminder-zones-for-live-detection.md,
+# O544-O570, after docs/zoneminder-detection-exclusions.md, O523-O535): the zone page's Live
+# detection section, its ticks and the zone's own thresholds saved by the page's own Save into
+# detector.detector_zone_labels, by whoever may edit the camera; ZoneMinder's Zones row as it was
+# after a Save of ticks alone; ZoneMinder's motion settings no longer required; and the zones API
+# answering as before (O492).
+zl() { q "SELECT labels FROM detector.detector_zone_labels WHERE zone_id=$1" | tr -d ' '; }
+zt() { q "SELECT IFNULL(thresholds, 'NULL') FROM detector.detector_zone_labels WHERE zone_id=$1" | tr -d ' '; }
 zrow() { q "SELECT * FROM Zones WHERE Id=$1"; }
 page=$(upage admin 'view=zone&mid=1&zid=0')
 has "the zone page's Live detection section" 'id="zoneDetection"' "$page"
-has "its ticks, the Looks for list" 'name="liveDetection\[labels\]\[\]" value="person" disabled' "$page"
-has "its ticks, More" 'name="liveDetection\[labels\]\[\]" value="toothbrush" disabled' "$page"
+has "its ticks, the Looks for list" 'name="liveDetection\[labels\]\[\]" value="person"' "$page"
+has "its ticks, More" 'name="liveDetection\[labels\]\[\]" value="toothbrush"' "$page"
 has "without the table: greyed out until ZoneMinder's next start" "Can be set after ZoneMinder's next start." "$page"
-has "applyZoneType enables the ticks for Inactive only" "\$j('.zoneDetectionLabel').prop('disabled', form.elements\['newZone\[Type\]'\].value != 'Inactive')" \
+has "without the table: the ticks greyed out" 'value="person" checked="checked" disabled="disabled"' "$page"
+has "applyZoneType hands each type to the section's script" 'ZMZoneDetection.applyZoneType(form)' \
   "$(docker exec "$name" cat /usr/share/zoneminder/www/skins/classic/views/js/zone.js)"
-# The table as the chart's seed makes it (deploy/live/schema.sql there).
+has "validateForm asks it, and doesn't insist on the motion settings" 'ZMZoneDetection.motionUnused' \
+  "$(docker exec "$name" cat /usr/share/zoneminder/www/skins/classic/views/js/zone.js)"
+has "the section's script on the page" 'zone_detection' "$page"
+has "its script: the ticks on every type but Privacy" 'Privacy: false' \
+  "$(docker exec "$name" cat /usr/share/zoneminder/www/skins/classic/js/zone_detection.js)"
+# The table as the chart's seed makes it (deploy/live/schema.sql there), with the zone's own thresholds.
 sql detector -e "CREATE TABLE IF NOT EXISTS detector_zone_labels (zone_id INT UNSIGNED NOT NULL PRIMARY KEY, labels JSON NOT NULL,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+  thresholds JSON NULL, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
 page=$(upage admin 'view=zone&mid=1&zid=0')
-has "a new zone ignores nothing, and says so" 'Nothing is ignored here until a type is ticked.' "$page"
-hasnt "a new zone: nothing ticked" 'name="liveDetection\[labels\]\[\]" value="[a-z ]*" checked' "$page"
+has "a new zone: every type ticked (O555, O560)" 'value="person" checked="checked"/>' "$page"
+has "a new zone: More's too" 'value="toothbrush" checked="checked"/>' "$page"
+# The ten animals are ticked as "animal" (detection_labels_ticked), as on the Detection tab; their
+# own ticks under More stay as they are, as there.
+hasnt "a new zone: nothing unticked but the animals' own" 'name="liveDetection\[labels\]\[\]" value="[a-z ]*"/>' \
+  "$(printf '%s' "$page" | grep -o 'name="liveDetection\[labels\]\[\]" value="[a-z ]*"[^/]*/>' \
+     | grep -vE 'value="(bird|cat|dog|horse|sheep|cow|elephant|bear|zebra|giraffe)"')"
+has "a new zone: animal ticked" 'value="animal" checked="checked"/>' "$page"
+has "a new Active zone: its own threshold per type, blank for the camera's" 'name="liveDetection\[thresholds\]\[person\]" min="0.30" max="0.95" step="0.05" value="" placeholder="0.60"' "$page"
+has "what the ticks mean on an Active zone" 'Only these types raise, join or hold an alarm here' "$page"
+has "what they mean on an Inactive zone" 'Live detection ignores these types here' "$page"
+has "the motion settings, said to be unused" "Live detection doesn't use ZoneMinder's motion settings" "$page"
+# An Inactive zone with nothing ticked: refused before ZoneMinder saves it (O548).
+refused=$(upost admin 'view=zone' "view=zone&action=zone&mid=1&zid=0&newZone[Name]=Bee&newZone[Type]=Inactive&newZone[Units]=Pixels&newZone[NumCoords]=4&newZone[Coords]=400,100 500,100 500,220 400,220&newZone[Area]=12000&newZone[AlarmRGB]=16711680&liveDetection[shown]=1")
+has "an Inactive zone with nothing ticked: refused, and says why" 'Not saved: an Inactive zone needs at least one type ticked under Live detection' "$refused"
+is "and nothing saved" 0 "$(q "SELECT COUNT(*) FROM Zones WHERE MonitorId=1 AND Name='Bee'")"
 # A new Inactive zone round the bee, person and animal ticked, by the page's Save: the fields the
 # page posts for an Inactive zone, as a browser sends them (applyCheckMethod leaves the filter and
 # blob boxes enabled, and empty).
@@ -701,23 +752,41 @@ is "its ticks saved against its new id, animal as the ten" '["bear","bird","cat"
 page=$(upage admin "view=zone&mid=1&zid=$bee")
 has "the page shows person ticked" 'name="liveDetection\[labels\]\[\]" value="person" checked' "$page"
 has "the page shows animal ticked" 'name="liveDetection\[labels\]\[\]" value="animal" checked' "$page"
-hasnt "and doesn't say nothing is ignored" 'Nothing is ignored here until' "$page"
+has "the page shows car unticked" 'name="liveDetection\[labels\]\[\]" value="car"/>' "$page"
+has "an Inactive zone: no thresholds of its own" 'name="liveDetection\[thresholds\]\[person\]"[^>]*disabled="disabled"' "$page"
 # The ticks alone: the same zone, person only. ZoneMinder's row is as it was (its own Save still
 # reloads the camera: it counts the empty boxes as changes to their NULL columns).
 before=$(zrow "$bee")
 zone "$bee" Inactive '&liveDetection[labels][]=person'
 is "ticks alone: ZoneMinder's Zones row as it was" "$before" "$(zrow "$bee")"
 is "ticks alone: saved" '["person"]' "$(zl "$bee")"
-# Another type: the ticks aren't sent (greyed out); they're kept, and in force again once Inactive.
-zone "$bee" Active
-is "another type: ZoneMinder saves the zone as before" Active "$(q "SELECT Type FROM Zones WHERE Id=$bee")"
-is "another type: the ticks kept" '["person"]' "$(zl "$bee")"
-zone "$bee" Inactive '&liveDetection[labels][]=person&liveDetection[labels][]=bird'
-is "Inactive again: ticked as saved" '["bird","person"]' "$(zl "$bee" | tr -d ' ')"
-zone "$bee" Inactive
-is "nothing ticked: nothing ignored, the row gone" '' "$(zl "$bee")"
 zone "$bee" Inactive '&liveDetection[labels][]=person&liveDetection[labels][]=unicorn'
 is "a type the list doesn't offer is left out" '["person"]' "$(zl "$bee")"
+# Every other type but Privacy has ticks now (O554): an Active zone of person and car, with its own
+# threshold for person, saved without any of ZoneMinder's motion settings (O551, O557).
+zone "$bee" Active '&liveDetection[labels][]=person&liveDetection[labels][]=car&liveDetection[thresholds][person]=0.82&liveDetection[thresholds][car]=&liveDetection[thresholds][dog]=0.9'
+is "Active: ZoneMinder saves the zone, its motion settings not required" "Active NULL NULL" "$(q "SELECT CONCAT_WS(' ', Type, IFNULL(MinPixelThreshold,'NULL'), IFNULL(MinAlarmPixels,'NULL')) FROM Zones WHERE Id=$bee")"
+is "Active: only these types" '["car","person"]' "$(zl "$bee")"
+is "Active: the zone's own threshold, on the 0.05 steps, only for a ticked type given one" '{"person":0.8}' "$(zt "$bee")"
+has "the page shows it" 'name="liveDetection\[thresholds\]\[person\]" min="0.30" max="0.95" step="0.05" value="0.80"' "$(upage admin "view=zone&mid=1&zid=$bee")"
+zone "$bee" Active '&liveDetection[thresholds][person]=2'
+is "Active, nothing ticked: kept as nothing, not every type" '[]' "$(zl "$bee")"
+is "and no thresholds left for types not ticked" 'NULL' "$(zt "$bee")"
+before=$(zrow "$bee")
+zone "$bee" Inactive
+is "Inactive with nothing ticked: refused, the zone still Active" "$before" "$(zrow "$bee")"
+is "and its ticks as they were" '[]' "$(zl "$bee")"
+zone "$bee" Preclusive '&liveDetection[labels][]=car&newZone[ExtendAlarmFrames]=5'
+is "Preclusive: the types that set it off" '["car"]' "$(zl "$bee")"
+is "Preclusive: Extend Alarm Frames, as ZoneMinder saves it" 5 "$(q "SELECT ExtendAlarmFrames FROM Zones WHERE Id=$bee")"
+zone "$bee" Inactive '&liveDetection[labels][]=person'
+is "Inactive again: ignores what's ticked" '["person"]' "$(zl "$bee")"
+# Zones made elsewhere (the seed's "All", the API), with no row: every type, unless Inactive.
+q "INSERT INTO Zones (MonitorId, Name, Type, Units, NumCoords, Coords, Area, CheckMethod) VALUES (1, 'Elsewhere', 'Active', 'Pixels', 4, '0,0 639,0 639,479 0,479', 307200, 'Blobs'), (1, 'Elsewhere off', 'Inactive', 'Pixels', 4, '0,0 9,0 9,9 0,9', 100, 'Blobs')"
+has "an Active zone with no row: every type ticked" 'value="toothbrush" checked="checked"/>' "$(upage admin "view=zone&mid=1&zid=$(q "SELECT Id FROM Zones WHERE Name='Elsewhere'")")"
+has "an Active zone with no row: the animals as \"animal\"" 'value="animal" checked="checked"/>' "$(upage admin "view=zone&mid=1&zid=$(q "SELECT Id FROM Zones WHERE Name='Elsewhere'")")"
+hasnt "an Inactive zone with no row: nothing ticked" 'value="[a-z ]*" checked' "$(upage admin "view=zone&mid=1&zid=$(q "SELECT Id FROM Zones WHERE Name='Elsewhere off'")")"
+q "DELETE FROM Zones WHERE Name LIKE 'Elsewhere%'"
 # Whoever may edit the camera, nobody else: viewer may only view it.
 before=$(zrow "$bee")
 has "the zone page refused to viewer, as ZoneMinder refuses it" 'view=error\|Error\|error' "$(upage viewer "view=zone&mid=1&zid=$bee")"
@@ -743,5 +812,35 @@ is "the app's zones call: the area, Inactive" Inactive "$(printf '%s' "$body" | 
 upost admin 'view=zones' "view=zones&action=delete&mid=1&markZids[]=$bee" >/dev/null
 is "deleted on the Zones page" 0 "$(q "SELECT COUNT(*) FROM Zones WHERE Id=$bee")"
 is "its ticks left for the seed" '["person"]' "$(zl "$bee")"
+
+# ---- The Detection tab's threshold and hold per type, and the monitor page (cluster-docs
+# docs/zoneminder-zones-for-live-detection.md; O549-O553, O557, O562, O563, O567, O568).
+tab=$(upage admin 'view=options&tab=detection')
+hasnt "the Detection tab: no Frames a second (the camera's Analysis FPS)" 'Frames a second\|\[per_second\]' "$tab"
+hasnt "the Detection tab: no single Confidence" '\[confidence\]' "$tab"
+has "before the column: shown greyed out, and says when" "The thresholds and holds can be changed after ZoneMinder's next start" "$tab"
+has "before the column: each type at 0.60 and 0.40" 'name="camera\[1\]\[thresholds\]\[person\]\[hold\]" min="0.10" max="0.95" step="0.05" value="0.40" style="width: 5em" disabled' "$tab"
+# The table as the chart's seed brings it up to date (deploy/live/schema.sql there).
+sql detector -e "ALTER TABLE detector_settings ADD COLUMN IF NOT EXISTS thresholds JSON NULL;
+  ALTER TABLE detector_settings ALTER COLUMN min_confidence SET DEFAULT 0.60, ALTER COLUMN per_second SET DEFAULT 5"
+tab=$(upage admin 'view=options&tab=detection')
+has "a type with no value of its own: 0.60" 'name="camera\[1\]\[thresholds\]\[person\]\[threshold\]" min="0.30" max="0.95" step="0.05" value="0.60" style="width: 5em"/>' "$tab"
+has "the line on where the rate is set" "Analysis FPS" "$tab"
+csrf=$(upage admin 'view=eventserver' | sed -n 's/.*csrfMagicToken = "\([^"]*\)".*/\1/p' | head -1)
+docker exec "$name" curl -s -o /dev/null -c /tmp/admin.jar -b /tmp/admin.jar --data-urlencode "__csrf_magic=$csrf" \
+  -d 'view=options&tab=detection&detectionSave=1&camera[1][live]=1&camera[1][boxes]=1&camera[1][labels][]=person&camera[1][labels][]=car&camera[1][labels][]=animal&camera[1][thresholds][person][threshold]=0.72&camera[1][thresholds][person][hold]=0.9&camera[1][thresholds][animal][threshold]=0.5&camera[2][labels][]=person' \
+  'http://127.0.0.1/zm/index.php?view=options&tab=detection'
+is "saved: each type's threshold and hold, on the 0.05 steps, the hold never above the threshold, a type not given one at 0.60 and 0.40, the animals by their one row" \
+  '{"p":{"threshold":0.7,"hold":0.7},"c":{"threshold":0.6,"hold":0.4},"d":{"threshold":0.5,"hold":0.4},"n":12}' \
+  "$(q "SELECT thresholds FROM detector.detector_settings WHERE monitor_id=1" | jq -c '{p: .person, c: .car, d: .dog, n: length}')"
+is "saved: the retired columns untouched" "0.60 5" "$(q "SELECT CONCAT_WS(' ', min_confidence, per_second) FROM detector.detector_settings WHERE monitor_id=1")"
+is "a camera with no row yet: made, its retired columns at their defaults" '0.60 5 {"person":{"threshold":0.6,"hold":0.4}}' \
+  "$(q "SELECT CONCAT_WS(' ', min_confidence, per_second, thresholds) FROM detector.detector_settings WHERE monitor_id=2")"
+has "the page shows them" 'name="camera\[1\]\[thresholds\]\[person\]\[threshold\]" min="0.30" max="0.95" step="0.05" value="0.70"' "$(upage admin 'view=options&tab=detection')"
+has "the zone page's placeholder is the camera's threshold" 'name="liveDetection\[thresholds\]\[person\]" min="0.30" max="0.95" step="0.05" value="" placeholder="0.70"' "$(upage admin 'view=zone&mid=1&zid=0')"
+mon=$(upage admin 'view=monitor&mid=1')
+has "the monitor page: Analysis FPS is live detection's rate" "Live detection's rate for this camera" "$mon"
+has "the monitor page: Alarm Frame Count its samples in a row" 'before it raises or joins the alarm, 1 to 16' "$mon"
+has "the monitor page: the motion-only settings greyed out" "newMonitor\[AnalysisImage\]', 'newMonitor\[RefBlendPerc\]', 'newMonitor\[AlarmRefBlendPerc\]', 'newMonitor\[WarmupCount\]'" "$mon"
 
 echo "smoke test passed"

@@ -66,4 +66,50 @@ assert.deepStrictEqual([1, 2, 3, 4, 5, 6].filter((n) => fading(f, 11.0 + 0.2 * n
 f = rows([[10.0, [PERSON, CAR]], [10.2, [PERSON]]]);
 assert.strictEqual(D.holdOf(f, 0, 2, 0.2), 5);
 
-console.log('ok: live\'s fading boxes');
+// The alarming object's box (drawBox, alarmStyle, stripeTile): the owner, 20 November 2026, "Colour
+// by type AND add a Bold Black/Yellow angle striped box around the alarming object for the alarm
+// frame." (O558), wherever boxes are on (O565). A context that records what's drawn.
+const recorder = () => {
+  const ops = [];
+  const ctx = {ops: ops, globalAlpha: 1, lineWidth: 1, strokeStyle: null, fillStyle: null, lineCap: 'butt',
+    measureText: (t) => ({width: t.length * 7}),
+    strokeRect: (x, y, w, h) => ops.push(['strokeRect', ctx.strokeStyle, ctx.lineWidth, ctx.globalAlpha, [x, y, w, h]]),
+    fillRect: (x, y, w, h) => ops.push(['fillRect', ctx.fillStyle, [x, y, w, h]]),
+    fillText: (t) => ops.push(['fillText', t]),
+    beginPath: () => ops.push(['beginPath']),
+    moveTo: (x, y) => ops.push(['moveTo', x, y]),
+    lineTo: (x, y) => ops.push(['lineTo', x, y]),
+    stroke: () => ops.push(['stroke', ctx.strokeStyle, ctx.lineWidth])};
+  return ctx;
+};
+const STRIPES = {pattern: 'stripes'};
+const ALARMED = Object.assign({}, PERSON, {alarm: true});
+assert.deepStrictEqual(D.alarmStyle(4), {width: 12, stripe: 8, colours: ['#ffcc00', '#000000']}, 'three lines wide, stripes two');
+let ctx = recorder();
+D.drawBox(ctx, ALARMED, 1000, 500, 4, 16, false, STRIPES);
+assert.deepStrictEqual(ctx.ops[0], ['strokeRect', STRIPES, 12, 1, [200, 100, 300, 350]], 'striped, bold');
+assert.deepStrictEqual(ctx.ops[1][1], D.COLOURS.person, 'its tag in its type\'s colour');
+assert.deepStrictEqual(ctx.ops[2], ['fillText', 'person 87%']);
+ctx = recorder();
+D.drawBox(ctx, PERSON, 1000, 500, 4, 16, false, STRIPES);
+assert.deepStrictEqual(ctx.ops[0], ['strokeRect', D.COLOURS.person, 4, 1, [200, 100, 300, 350]], 'any other box as ever');
+ctx = recorder();
+D.drawBox(ctx, Object.assign({fade: 0.5}, ALARMED), 1000, 500, 4, 16, true, STRIPES);
+assert.deepStrictEqual(ctx.ops[0], ['strokeRect', D.FADED, 4, 0.5, [200, 100, 300, 350]], 'fading: grey, not striped');
+// Its fading copy carries no alarm mark: the ordinary grey one.
+f = rows([[10.0, [ALARMED]], [10.2, []]]);
+assert.strictEqual(D.fadingFor(f, 1, 0.2)[0].alarm, undefined, 'the fading copy isn\'t the alarming one');
+// The tile: 2 stripes square, black, yellow bands across it at 45 degrees, half and half.
+const tileCtx = recorder();
+const tile = {width: 0, height: 0, getContext: () => tileCtx};
+D.stripeTile(tile, 4);
+assert.deepStrictEqual([tile.width, tile.height], [16, 16]);
+assert.deepStrictEqual(tileCtx.ops[0], ['fillRect', '#000000', [0, 0, 16, 16]]);
+const stroke = tileCtx.ops.find((o) => o[0] == 'stroke');
+assert.strictEqual(stroke[1], '#ffcc00');
+assert.ok(Math.abs(stroke[2] * Math.SQRT2 - 8) < 1e-9, 'each yellow band a stripe wide along the outline');
+for (const op of tileCtx.ops.filter((o) => o[0] == 'moveTo' || o[0] == 'lineTo')) {
+  assert.strictEqual(((op[1] + op[2]) % 16 + 16) % 16, 0, 'each band along x + y = k * 16: 45 degrees, repeating');
+}
+
+console.log('ok: live\'s fading boxes, the alarming object\'s striped box');
