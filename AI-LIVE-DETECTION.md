@@ -142,9 +142,20 @@ Every change is marked `zindello-cluster` in a comment where it sits.
       that frame bold, striped black and yellow, its tag in its type's colour (`drawBox`,
       `stripeTile` in `js/detections.js`; tested in `tests/detections.test.js`).
     - **Not here:** ZoneMinder applying Alarm Frame Count a second time to the trigger
-      (`src/zm_monitor.cpp`): this image compiles nothing, so that stays as upstream has it.
+      (`src/zm_monitor.cpp`): this stays as upstream has it (only `zmc`'s event insert is
+      compiled, item 15).
+15. **`zmc` backs off when it can't create an event** (cluster-docs
+    `docs/zoneminder-database-switchover.md`; O635, O637, T203). Upstream's `Event::Event` tried the
+    `Events` insert again at once, logging every failure, and never left a server that had turned
+    read-only, so a MariaDB switchover flooded the logs. Now `zmDbTryInsert` (`src/zm_db.cpp`) tries
+    once, logs nothing, and connects again when the connection has gone or the server says 1290
+    (read-only; O637), so the next try reaches the new primary through `mariadb-ha-primary`; and
+    `Event::Event` (`src/zm_event.cpp`) waits `zmDbOutageBackoff`: 1 s, 2 s, then 4 s (O641),
+    with one warning per try and one line when it works. It sleeps a second at a time, so stopping
+    `zmc` isn't held up. Meanwhile the camera's analysis waits; capture goes on into the packet
+    queue, which drops its oldest frames past its cap. Tested by `tests/zm_db_outage.cpp`.
 
-`git log $(cat ai-live-detection/UPSTREAM_RELEASE)..ai-live-detection -- web` lists them.
+`git log $(cat ai-live-detection/UPSTREAM_RELEASE)..ai-live-detection -- web src tests` lists them.
 
 ## The branches
 
@@ -160,7 +171,13 @@ settings; ours are `.github/workflows/ai-live-detection-*`.
 A merge to `ai-live-detection` builds `ghcr.io/zindello-cluster/zoneminder:<release>-es`: the
 ZoneMinder team's image of that release (the `FROM` in `ai-live-detection/Dockerfile`, by digest)
 with the web files our commits touch laid over `/usr/share/zoneminder/www` (the API's under
-`/usr/share/zoneminder/www/api`, as `web/api/` is in the repo). Nothing is compiled.
+`/usr/share/zoneminder/www/api`, as `web/api/` is in the repo), and our `zmc` over `/usr/bin/zmc`
+(item 15). `zmc` is the one thing compiled: the Dockerfile's `zmc` stage takes the source package
+the image's own `zoneminder` package was built from (zmrepo's, the same version), checks that its
+copies of the C++ files we change are upstream's at the release, lays ours over them, builds it as
+Debian does (`dpkg-buildpackage -B`), keeps only `zmc`, and runs our `[db]` tests. CI checks first
+that the base image's `/usr/bin/zmc` is still its package's (`dpkg --verify`), and after, that
+ours in the image finds every library (`ldd`).
 Before building, CI checks that the base image's copies of those files are upstream's at that
 release, so a base image that changed them fails the build rather than being overwritten
 (`tests/check-files.sh`), and lints them; after building, it starts the image against a throwaway
