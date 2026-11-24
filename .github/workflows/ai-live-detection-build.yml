@@ -88,7 +88,7 @@ jobs:
           docker run --rm --entrypoint /bin/sh "$image" -c '
             set -e
             ! ldd /usr/bin/zmc | grep "not found"
-            strings /usr/bin/zmc | grep -q "created after %d tries" || { echo "zmc in the image is not ours" >&2; exit 1; }
+            grep -aq "created after %d tries" /usr/bin/zmc || { echo "zmc in the image is not ours" >&2; exit 1; }
             echo "zmc: ours, every library found"'
 
       - name: Start it against a throwaway MariaDB and check each page we change
