@@ -145,11 +145,11 @@ Every change is marked `zindello-cluster` in a comment where it sits.
       (`src/zm_monitor.cpp`): this stays as upstream has it (only `zmc`'s event insert is
       compiled, item 15).
 15. **`zmc` backs off when it can't create an event** (cluster-docs
-    `docs/zoneminder-database-switchover.md`; O635, T203). Upstream's `Event::Event` tried the
+    `docs/zoneminder-database-switchover.md`; O635, O637, T203). Upstream's `Event::Event` tried the
     `Events` insert again at once, logging every failure, and never left a server that had turned
     read-only, so a MariaDB switchover flooded the logs. Now `zmDbTryInsert` (`src/zm_db.cpp`) tries
     once, logs nothing, and connects again when the connection has gone or the server says 1290
-    (read-only), so the next try reaches the new primary through `mariadb-ha-primary`; and
+    (read-only; O637), so the next try reaches the new primary through `mariadb-ha-primary`; and
     `Event::Event` (`src/zm_event.cpp`) waits `zmDbOutageBackoff`: 1 s, doubling, at most 16 s,
     with one warning per try and one line when it works. It sleeps a second at a time, so stopping
     `zmc` isn't held up. Meanwhile the camera's analysis waits; capture goes on into the packet
