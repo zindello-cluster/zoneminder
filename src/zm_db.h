@@ -48,11 +48,13 @@ useconds_t zmDbContentionBackoff(int attempt);
 // or read-only (a MariaDB switchover leaves the connection on the old primary,
 // alive but refusing writes with 1290).
 //
-// The longest wait between tries, in seconds.
-constexpr int kDbOutageBackoffCap = 16;
+// The longest wait between tries, in seconds: 4 (cluster-docs O641). Memory is
+// bounded by the camera's packet queue whatever this is; it sets only how soon
+// recording resumes once the database is back.
+constexpr int kDbOutageBackoffCap = 4;
 
-// The wait, in seconds, after the `attempt`th failed try: 1 s, doubling, never
-// more than kDbOutageBackoffCap; 0 for an attempt numbered below 1.
+// The wait, in seconds, after the `attempt`th failed try: 1 s, 2 s, then
+// kDbOutageBackoffCap; 0 for an attempt numbered below 1.
 int zmDbOutageBackoff(int attempt);
 
 // Runs `query` once and returns the new row's id, or 0 with the error in `err`

@@ -301,7 +301,7 @@ uint64_t zmDbDoInsert(const std::string &query) {
 
 int zmDbOutageBackoff(int attempt) {
   if (attempt < 1) return 0;
-  if (attempt > 5) return kDbOutageBackoffCap;  // 1 << 5 = 32 is already past the cap
+  if (attempt > 3) return kDbOutageBackoffCap;  // 1, 2, 4 s, then the cap (cluster-docs O641)
   return std::min(1 << (attempt - 1), kDbOutageBackoffCap);
 }
 

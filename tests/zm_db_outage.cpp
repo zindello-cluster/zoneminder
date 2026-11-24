@@ -23,12 +23,13 @@
 #include "zm_db.h"
 
 TEST_CASE("zmDbOutageBackoff", "[db]") {
-  SECTION("one second first, doubling") {
+  SECTION("1 s, 2 s, 4 s, then 4 s (cluster-docs O641)") {
+    REQUIRE(kDbOutageBackoffCap == 4);
     REQUIRE(zmDbOutageBackoff(1) == 1);
     REQUIRE(zmDbOutageBackoff(2) == 2);
     REQUIRE(zmDbOutageBackoff(3) == 4);
-    REQUIRE(zmDbOutageBackoff(4) == 8);
-    REQUIRE(zmDbOutageBackoff(5) == 16);
+    REQUIRE(zmDbOutageBackoff(4) == 4);
+    REQUIRE(zmDbOutageBackoff(5) == 4);
   }
 
   SECTION("never more than the cap, however long it lasts") {
@@ -36,7 +37,7 @@ TEST_CASE("zmDbOutageBackoff", "[db]") {
       REQUIRE(zmDbOutageBackoff(attempt) <= kDbOutageBackoffCap);
       REQUIRE(zmDbOutageBackoff(attempt) > 0);
     }
-    REQUIRE(zmDbOutageBackoff(6) == kDbOutageBackoffCap);
+    REQUIRE(zmDbOutageBackoff(4) == kDbOutageBackoffCap);
     REQUIRE(zmDbOutageBackoff(1000000) == kDbOutageBackoffCap);
   }
 

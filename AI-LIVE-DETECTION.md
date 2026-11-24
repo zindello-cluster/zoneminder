@@ -150,7 +150,7 @@ Every change is marked `zindello-cluster` in a comment where it sits.
     read-only, so a MariaDB switchover flooded the logs. Now `zmDbTryInsert` (`src/zm_db.cpp`) tries
     once, logs nothing, and connects again when the connection has gone or the server says 1290
     (read-only; O637), so the next try reaches the new primary through `mariadb-ha-primary`; and
-    `Event::Event` (`src/zm_event.cpp`) waits `zmDbOutageBackoff`: 1 s, doubling, at most 16 s,
+    `Event::Event` (`src/zm_event.cpp`) waits `zmDbOutageBackoff`: 1 s, 2 s, then 4 s (O641),
     with one warning per try and one line when it works. It sleeps a second at a time, so stopping
     `zmc` isn't held up. Meanwhile the camera's analysis waits; capture goes on into the packet
     queue, which drops its oldest frames past its cap. Tested by `tests/zm_db_outage.cpp`.
