@@ -43,6 +43,24 @@ constexpr int kMaxDbContentionRetries = 5;
 // 3 seconds across the whole budget.
 useconds_t zmDbContentionBackoff(int attempt);
 
+// Ours (AI-LIVE-DETECTION.md, item 15; cluster-docs O635): an insert that must
+// not be lost, such as a new event's row, tried again while the database is away
+// or read-only (a MariaDB switchover leaves the connection on the old primary,
+// alive but refusing writes with 1290).
+//
+// The longest wait between tries, in seconds.
+constexpr int kDbOutageBackoffCap = 16;
+
+// The wait, in seconds, after the `attempt`th failed try: 1 s, doubling, never
+// more than kDbOutageBackoffCap; 0 for an attempt numbered below 1.
+int zmDbOutageBackoff(int attempt);
+
+// Runs `query` once and returns the new row's id, or 0 with the error in `err`
+// and `reason`. Logs nothing. When the connection has gone or the server is
+// read-only it closes it and connects again, so the next try reaches whichever
+// server is primary now. Lock contention is retried as zmDbDoInsert does.
+uint64_t zmDbTryInsert(const std::string &query, unsigned int &err, std::string &reason);
+
 class zmDbQueue {
  private:
   std::queue<std::string> mQueue;

@@ -299,6 +299,35 @@ uint64_t zmDbDoInsert(const std::string &query) {
   return id;
 }
 
+int zmDbOutageBackoff(int attempt) {
+  if (attempt < 1) return 0;
+  if (attempt > 5) return kDbOutageBackoffCap;  // 1 << 5 = 32 is already past the cap
+  return std::min(1 << (attempt - 1), kDbOutageBackoffCap);
+}
+
+uint64_t zmDbTryInsert(const std::string &query, unsigned int &err, std::string &reason) {
+  std::lock_guard<std::mutex> lck(db_mutex);
+  err = 0;
+  reason.clear();
+  if (!zmDbConnected and !zmDbConnect()) {
+    err = mysql_errno(&dbconn);
+    reason = "can't connect to the database";
+    return 0;
+  }
+  int contention_attempts = 0;
+  while (mysql_query(&dbconn, query.c_str())) {
+    reason = mysql_error(&dbconn);
+    err = mysql_errno(&dbconn);
+    if (err == ER_OPTION_PREVENTS_STATEMENT or mysql_ping(&dbconn)) {
+      // Read-only (1290) or gone: a fresh connection follows the primary.
+      zmDbReconnect();
+      return 0;
+    }
+    if (zm_terminate or !retry_after_contention(err, query, contention_attempts)) return 0;
+  }
+  return mysql_insert_id(&dbconn);
+}
+
 int zmDbDoUpdate(const std::string &query) {
   std::lock_guard<std::mutex> lck(db_mutex);
   if (!zmDbConnected and !zmDbConnect())

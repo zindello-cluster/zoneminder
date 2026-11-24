@@ -30,6 +30,7 @@
 #include "zm_utils.h"
 #include "zm_videostore.h"
 
+#include <chrono>
 #include <cstring>
 #include <list>
 #include <set>
@@ -147,9 +148,35 @@ Event::Event(
                       monitor->Latitude(),
                       monitor->Longitude()
                     );
-  do {
-    id = zmDbDoInsert(sql);
-  } while (!id and !zm_terminate);
+  // Ours (AI-LIVE-DETECTION.md, item 15; cluster-docs O635): with a pause
+  // between tries that doubles to a cap, one line per try, and a fresh
+  // connection when the server has gone or turned read-only. Upstream tried
+  // again at once, logging every failure, and never left a read-only server.
+  {
+    int tries = 0;
+    auto first_failure = std::chrono::steady_clock::now();
+    while (!zm_terminate) {
+      unsigned int err = 0;
+      std::string reason;
+      id = zmDbTryInsert(sql, err, reason);
+      if (id) {
+        if (tries) {
+          auto took = std::chrono::duration_cast<std::chrono::seconds>(
+              std::chrono::steady_clock::now() - first_failure).count();
+          Info("Monitor %u: event %" PRIu64 " created after %d tries, %" PRId64 " s",
+               monitor->Id(), id, tries + 1, static_cast<int64_t>(took));
+        }
+        break;
+      }
+      if (!tries) first_failure = std::chrono::steady_clock::now();
+      tries++;
+      int wait = zmDbOutageBackoff(tries);
+      Warning("Monitor %u: can't create its event in the database (try %d: %u %s); trying again in %d s",
+              monitor->Id(), tries, err, reason.c_str(), wait);
+      // In slices of a second, so stopping zmc isn't held up.
+      for (int slept = 0; slept < wait and !zm_terminate; slept++) sleep(1);
+    }
+  }
 
   /* None of these are crucial, and are simple when done as individual transactions */
   sql = stringtf("INSERT INTO `Events_Hour` (EventId,MonitorId,StartDateTime,DiskSpace)"

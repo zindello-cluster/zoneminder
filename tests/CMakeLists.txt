@@ -17,6 +17,7 @@ set(TEST_SOURCES
   zm_crypt.cpp
   zm_db_contention.cpp
   zm_db_contention_live.cpp
+  zm_db_outage.cpp
   zm_event_hardlink.cpp
   zm_font.cpp
   zm_monitor_shm.cpp

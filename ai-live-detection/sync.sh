@@ -33,7 +33,7 @@ fi
 git commit -q -m "Merge upstream ZoneMinder $release"
 
 echo "$release" > ai-live-detection/UPSTREAM_RELEASE
-sed -i.bak "s|^FROM ghcr.io/zoneminder/zoneminder:.*|FROM $image@$digest|" ai-live-detection/Dockerfile
+sed -i.bak "s|^FROM ghcr.io/zoneminder/zoneminder:[^ ]*|FROM $image@$digest|" ai-live-detection/Dockerfile
 rm ai-live-detection/Dockerfile.bak
 git commit -q -m "ai-live-detection: upstream $release, built on $image@$digest" ai-live-detection/UPSTREAM_RELEASE ai-live-detection/Dockerfile
 

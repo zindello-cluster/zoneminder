@@ -33,7 +33,10 @@ jobs:
         run: |
           set -euo pipefail
           release=$(cat ai-live-detection/UPSTREAM_RELEASE)
-          from=$(sed -n 's/^FROM \(ghcr.io\/zoneminder\/zoneminder:[^ ]*\).*/\1/p' ai-live-detection/Dockerfile)
+          # Both FROMs (the zmc stage's and the image's) are the same team image.
+          froms=$(sed -n 's/^FROM \(ghcr.io\/zoneminder\/zoneminder:[^ ]*\).*/\1/p' ai-live-detection/Dockerfile | sort -u)
+          test "$(echo "$froms" | wc -l)" = 1 || { echo "::error::ai-live-detection/Dockerfile: the FROMs differ: $froms" >&2; exit 1; }
+          from=$froms
           from_release=$(echo "$from" | sed -n 's/.*:\([0-9][0-9.]*\)-es@.*/\1/p')
           test -n "$from_release" || { echo "::error::ai-live-detection/Dockerfile: expected FROM ghcr.io/zoneminder/zoneminder:<release>-es@sha256:…" >&2; exit 1; }
           test "$from_release" = "$release" || { echo "::error::UPSTREAM_RELEASE is $release but the Dockerfile's FROM is $from_release" >&2; exit 1; }
@@ -54,13 +57,39 @@ jobs:
           docker pull -q "$BASE"
           sh ai-live-detection/tests/check-files.sh "$RELEASE" HEAD "$BASE" ai-live-detection/web
 
+      - name: Export our C++ files for the zmc stage; the base image's zmc must be its package's
+        env:
+          RELEASE: ${{ steps.release.outputs.release }}
+          BASE: ${{ steps.release.outputs.base }}
+        run: |
+          set -euo pipefail
+          sh ai-live-detection/tests/export-zmc.sh "$RELEASE" HEAD ai-live-detection/zmc
+          # A team image that patched zmc after installing the package fails here rather than
+          # being overwritten.
+          changed=$(docker run --rm --entrypoint dpkg "$BASE" --verify zoneminder | grep ' /usr/bin/zmc$' || true)
+          test -z "$changed" || { echo "::error::the base image's /usr/bin/zmc isn't its zoneminder package's: $changed" >&2; exit 1; }
+
       - name: Build the image
         env:
           RELEASE: ${{ steps.release.outputs.release }}
         run: |
+          # The zmc stage rebuilds zmc from the image's own source package with our C++ files and
+          # runs our [db] tests; a failure there fails the build.
           docker build -t "ghcr.io/${{ github.repository }}:$RELEASE-es" \
             --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
             --label "org.opencontainers.image.revision=${{ github.sha }}" ai-live-detection
+
+      - name: Our zmc in the image starts and finds every library it needs
+        env:
+          RELEASE: ${{ steps.release.outputs.release }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${{ github.repository }}:$RELEASE-es"
+          docker run --rm --entrypoint /bin/sh "$image" -c '
+            set -e
+            ! ldd /usr/bin/zmc | grep "not found"
+            strings /usr/bin/zmc | grep -q "created after %d tries" || { echo "zmc in the image is not ours" >&2; exit 1; }
+            echo "zmc: ours, every library found"'
 
       - name: Start it against a throwaway MariaDB and check each page we change
         env:
