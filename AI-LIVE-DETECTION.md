@@ -4,8 +4,8 @@ This is [ZoneMinder/zoneminder](https://github.com/ZoneMinder/zoneminder) (GPL-2
 live detection's web pages on security.zindello.com.au, until upstream has them (cluster-docs:
 `spec/layout.md`, O366, O374–O377; the design is `external-security.zindello.com.au`'s
 [`docs/live-detection.md`](https://github.com/zindello-cluster/external-security.zindello.com.au/blob/main/docs/live-detection.md)).
-It's a feature that could go upstream, so it's kept as small commits that a pull request could
-carry.
+It's never merged back upstream, and no pull request is offered to it (the owner, 25 November
+2026: "We'll never be merging back to upstream"; cluster-docs O720).
 
 ## Our commits
 
