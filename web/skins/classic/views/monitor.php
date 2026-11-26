@@ -392,8 +392,9 @@ if ( $monitor->Type() != 'WebSite' ) {
   // zindello-cluster: the Camera tab, a VIGI camera's own settings (cluster-docs
   // docs/zoneminder-camera-tab.md, O508-O511), for the cameras camera setup sets, to whoever may view
   // System settings.
-  require_once('includes/vigi.php');
-  if ($monitor->Id() and canView('System') and vigi_camera_of($monitor)) $tabs['camera'] = 'Camera';
+  // Its settings come through the camera changer's API (O803, O808): ZoneMinder never signs in to it.
+  require_once('includes/camerachanger.php');
+  if ($monitor->Id() and canView('System') and camera_changer_camera_of($monitor)) $tabs['camera'] = 'Camera';
 }
 
 if (isset($_REQUEST['tab']) and isset($tabs[$_REQUEST['tab']]) ) {
