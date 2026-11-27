@@ -718,6 +718,13 @@ has "applyZoneType hands each type to the section's script" 'ZMZoneDetection.app
 has "validateForm asks it, and doesn't insist on the motion settings" 'ZMZoneDetection.motionUnused' \
   "$(docker exec "$name" cat /usr/share/zoneminder/www/skins/classic/views/js/zone.js)"
 has "the section's script on the page" 'zone_detection' "$page"
+# Tick all and Untick all (cluster-docs docs/zoneminder-zone-tick-all.md, O947): one pair above
+# every type; what they do, on their own (tests/zone_detection.test.js), and the script's links.
+has "Tick all above the types" 'class="zoneDetectionTickAll" data-tick="1">Tick all</a>' "$page"
+has "Untick all beside it" 'class="zoneDetectionTickAll" data-tick="0">Untick all</a>' "$page"
+has "its script: the links" 'zoneDetectionTickAll' \
+  "$(docker exec "$name" cat /usr/share/zoneminder/www/skins/classic/js/zone_detection.js)"
+node ai-live-detection/tests/zone_detection.test.js || fail "Tick all and Untick all"
 has "its script: the ticks on every type but Privacy" 'Privacy: false' \
   "$(docker exec "$name" cat /usr/share/zoneminder/www/skins/classic/js/zone_detection.js)"
 # The table as the chart's seed makes it (deploy/live/schema.sql there), with the zone's own thresholds.
@@ -732,6 +739,7 @@ hasnt "a new zone: nothing unticked but the animals' own" 'name="liveDetection\[
   "$(printf '%s' "$page" | grep -o 'name="liveDetection\[labels\]\[\]" value="[a-z ]*"[^/]*/>' \
      | grep -vE 'value="(bird|cat|dog|horse|sheep|cow|elephant|bear|zebra|giraffe)"')"
 has "a new zone: animal ticked" 'value="animal" checked="checked"/>' "$page"
+has "a new zone: More's count, in the span the script keeps up to date" '<details id="zoneDetectionMore" open>.*<span id="zoneDetectionMoreCount"> (63)</span>' "$(printf '%s' "$page" | tr -d '\n')"
 has "a new Active zone: its own threshold per type, blank for the camera's" 'name="liveDetection\[thresholds\]\[person\]" min="0.30" max="0.95" step="0.05" value="" placeholder="0.60"' "$page"
 has "what the ticks mean on an Active zone" 'Only these types raise, join or hold an alarm here' "$page"
 has "what they mean on an Inactive zone" 'Live detection ignores these types here' "$page"
@@ -793,6 +801,7 @@ q "DELETE FROM Zones WHERE Name LIKE 'Elsewhere%'"
 before=$(zrow "$bee")
 has "the zone page refused to viewer, as ZoneMinder refuses it" 'view=error\|Error\|error' "$(upage viewer "view=zone&mid=1&zid=$bee")"
 hasnt "no Live detection section for viewer" 'id="zoneDetection"' "$(upage viewer "view=zone&mid=1&zid=$bee")"
+hasnt "nor its Tick all for viewer" 'zoneDetectionTickAll' "$(upage viewer "view=zone&mid=1&zid=$bee")"
 csrf=$(upage viewer 'view=eventserver' | sed -n 's/.*csrfMagicToken = "\([^"]*\)".*/\1/p' | head -1)
 docker exec "$name" curl -s -o /dev/null -c /tmp/viewer.jar -b /tmp/viewer.jar --data-urlencode "__csrf_magic=$csrf" \
   -d "view=zone&action=zone&mid=1&zid=$bee&newZone[Name]=Bee&newZone[Type]=Inactive&liveDetection[shown]=1&liveDetection[labels][]=car" \
