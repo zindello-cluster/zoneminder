@@ -40,8 +40,8 @@ jobs:
           {
             echo "Upstream released [$latest](https://github.com/$UPSTREAM/releases/tag/$latest); \`ai-live-detection\` is on $ours."
             echo
-            echo "1. Read its release notes. Does upstream now have what our commits do (AI-LIVE-DETECTION.md)? Then the fork has done its job: retire it."
-            echo "2. Otherwise, sync \`master\`, run \`ai-live-detection/sync.sh $latest\`, push \`upstream-$latest\` and open a pull request into \`ai-live-detection\` with the release notes, risks and rollback."
+            echo "1. Read its release notes. Does upstream now have a change functionally identical to one of ours (AI-LIVE-DETECTION.md)? It's assessed on its merits, ours kept or upstream's taken, never taken in place of ours automatically (cluster-docs O723). The fork is retired only once upstream's is taken for everything it carries."
+            echo "2. To move to it, sync \`master\`, run \`ai-live-detection/sync.sh $latest\`, push \`upstream-$latest\` and open a pull request into \`ai-live-detection\` with the release notes, risks and rollback."
             echo "3. Once that's merged and built, the chart's pull request in external-security.zindello.com.au moves \`image:\` to the new digest."
           } > "$RUNNER_TEMP/body.md"
           gh issue create --title "$title" --body-file "$RUNNER_TEMP/body.md"

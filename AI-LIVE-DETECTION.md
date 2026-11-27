@@ -1,8 +1,9 @@
 # AI live detection: our fork of ZoneMinder
 
 This is [ZoneMinder/zoneminder](https://github.com/ZoneMinder/zoneminder) (GPL-2.0), forked for
-live detection's web pages on security.zindello.com.au, until upstream has them (cluster-docs:
-`spec/layout.md`, O366, O374–O377; the design is `external-security.zindello.com.au`'s
+live detection's web pages on security.zindello.com.au. A functionally identical change upstream
+would be assessed on its merits, not taken in place of ours automatically (cluster-docs O723;
+cluster-docs: `spec/layout.md`, O366, O374–O377; the design is `external-security.zindello.com.au`'s
 [`docs/live-detection.md`](https://github.com/zindello-cluster/external-security.zindello.com.au/blob/main/docs/live-detection.md)).
 It's never merged back upstream, and no pull request is offered to it (the owner, 25 November
 2026: "We'll never be merging back to upstream"; cluster-docs O720).
@@ -206,8 +207,9 @@ there moves it, and the owner merges and syncs it. The image is private on GHCR.
 
 1. Each morning the `upstream` workflow opens an issue when upstream has a release newer than
    `UPSTREAM_RELEASE`.
-2. Read its release notes. If upstream now has what our commits do, stop here and retire the fork
-   (below).
+2. Read its release notes. If upstream now has a change functionally identical to one of our
+   commits, it's assessed on its merits, ours kept or upstream's taken, never taken in place of
+   ours automatically (cluster-docs O723).
 3. Sync `master` (the **Sync fork** button, or `gh repo sync zindello-cluster/zoneminder -b master`).
 4. `ai-live-detection/sync.sh <release>` merges it into a new branch, `upstream-<release>`, keeps
    upstream's workflows out, moves the `FROM` to the team's image of the release by digest, and
@@ -218,5 +220,6 @@ there moves it, and the owner merges and syncs it. The image is private on GHCR.
 
 ## Retiring the fork
 
-When upstream has the change: put `external-security.zindello.com.au`'s `image:` back on
+When, assessed on its merits (cluster-docs O723), upstream's change is taken for everything our
+commits do: put `external-security.zindello.com.au`'s `image:` back on
 `ghcr.io/zoneminder/zoneminder`, archive this repo, and take its row out of the layout.
