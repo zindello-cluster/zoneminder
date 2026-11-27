@@ -13,6 +13,12 @@
  *   Extend Alarm Frame Count is left to ZoneMinder (on for a Preclusive zone, which live detection
  *   still counts).
  *
+ * "Tick all · Untick all" (cluster-docs docs/zoneminder-zone-tick-all.md, O947): ticks or unticks every
+ * box that can be ticked, More's included, and leaves the thresholds as they are; then the same as a
+ * tick by hand: the red line for nothing ticked, and More's count, which follows every tick. Greyed
+ * out where the ticks are (a Privacy zone; before the table exists). On an Inactive zone, Untick all
+ * leaves nothing ticked, so Save is refused until a type is ticked, as below.
+ *
  * ZMZoneDetection.errors(form), from ZoneMinder's own validateForm: an Inactive zone with nothing
  * ticked is refused (O548). ZMZoneDetection.motionUnused tells validateForm not to insist on the
  * motion settings.
@@ -57,6 +63,57 @@ var ZMZoneDetection = (function() {
     return document.querySelectorAll('.zoneDetectionLabel:checked').length;
   }
 
+  // Every box given, ticked (on) or not, but those that can't be changed (disabled); thresholds
+  // aren't among them. Returns how many changed.
+  function tickAll(boxes, on) {
+    var changed = 0;
+    Array.prototype.forEach.call(boxes, function(el) {
+      if (el.disabled || el.checked == on) return;
+      el.checked = on;
+      changed++;
+    });
+    return changed;
+  }
+
+  // More's count, as the page draws it: " (63)", or nothing when none is ticked.
+  function countText(n) {
+    return n ? ' (' + n + ')' : '';
+  }
+
+  function showMoreCount() {
+    var el = document.getElementById('zoneDetectionMoreCount');
+    if (!el) return;
+    el.textContent = countText(document.querySelectorAll('#zoneDetectionMore .zoneDetectionLabel:checked').length);
+  }
+
+  function changed(form) {
+    showNothing(form);
+    showMoreCount();
+  }
+
+  // The links: usable while the ticks are, greyed out and out of reach otherwise.
+  function showTickAll(on) {
+    document.querySelectorAll('.zoneDetectionTickAll').forEach(function(el) {
+      el.setAttribute('aria-disabled', on ? 'false' : 'true');
+      el.setAttribute('tabindex', on ? '0' : '-1');
+      el.style.opacity = on ? '' : '0.5';
+      el.style.pointerEvents = on ? '' : 'none';
+    });
+  }
+
+  function watchTickAll(form) {
+    document.querySelectorAll('.zoneDetectionTickAll').forEach(function(el) {
+      if (el.dataset.watched) return;
+      el.dataset.watched = '1';
+      el.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (el.getAttribute('aria-disabled') == 'true') return;
+        tickAll(document.querySelectorAll('.zoneDetectionLabel'), el.getAttribute('data-tick') == '1');
+        changed(form);
+      });
+    });
+  }
+
   function showNothing(form) {
     var el = document.getElementById('zoneDetectionNothing');
     if (!el) return;
@@ -77,7 +134,7 @@ var ZMZoneDetection = (function() {
       el.disabled = !TICKS[t] || el.classList.contains('zoneDetectionOff');
       if (!el.dataset.watched) {
         el.dataset.watched = '1';
-        el.addEventListener('change', function() { showNothing(form); });
+        el.addEventListener('change', function() { changed(form); });
       }
     });
     document.querySelectorAll('.zoneDetectionThreshold').forEach(function(el) {
@@ -89,6 +146,8 @@ var ZMZoneDetection = (function() {
     document.querySelectorAll('.zoneDetectionThresholdHelp').forEach(function(el) {
       el.style.display = THRESHOLDS[t] ? '' : 'none';
     });
+    showTickAll(TICKS[t] && !document.querySelector('.zoneDetectionLabel.zoneDetectionOff'));
+    watchTickAll(form);
     showNothing(form);
   }
 
@@ -101,5 +160,8 @@ var ZMZoneDetection = (function() {
     return out;
   }
 
-  return {applyZoneType: applyZoneType, errors: errors, motionUnused: true, MOTION: MOTION};
+  return {applyZoneType: applyZoneType, errors: errors, motionUnused: true, MOTION: MOTION,
+    tickAll: tickAll, countText: countText};
 })();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = ZMZoneDetection;

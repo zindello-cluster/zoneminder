@@ -12,6 +12,9 @@
 //   nothing ticked (O548).
 // - Beside each tick, the zone's own threshold for that type, blank for the camera's (O563, O568):
 //   Active, Inclusive and Exclusive zones only.
+// - "Tick all · Untick all" above the types ticks or unticks every one, More's included, leaving the
+//   thresholds as they are; More's count follows the ticks (cluster-docs docs/zoneminder-zone-tick-all.md,
+//   O947). Untick all on an Inactive zone leaves it to the rule above.
 // - ZoneMinder's motion settings (Preset, Alarm Colour, Alarm Check Method and the pixel settings)
 //   are greyed out for every type and no longer required, kept in the row as they are (O551, O557,
 //   O558); Extend Alarm Frames stays, for a Preclusive zone (js/zone_detection.js).
@@ -87,10 +90,11 @@ $zoneMeanings = array(
               <p class="mb-1 zoneDetectionMeaning" data-zone-type="<?php echo $type ?>"<?php echo $type == $zoneType ? '' : ' style="display: none"' ?>><?php echo $words ?></p>
 <?php } ?>
               <p class="mb-1 text-muted zoneDetectionThresholdHelp"><?php echo translate('The number beside a type is its threshold in this zone, for raising and joining an alarm here and for the samples in a row: blank is the camera\'s (the Detection tab), and only a higher one changes anything. Holding an alarm already on is always the camera\'s hold.') ?></p>
+              <p class="mb-1 zoneDetectionAll"><a href="#" class="zoneDetectionTickAll" data-tick="1"><?php echo translate('Tick all') ?></a> &middot; <a href="#" class="zoneDetectionTickAll" data-tick="0"><?php echo translate('Untick all') ?></a></p>
               <div id="zoneDetectionLabels">
 <?php foreach (detection_labels_common() as $l) echo $zoneTick($l); ?>
-                <details<?php echo $zoneMoreTicked ? ' open' : '' ?>>
-                  <summary><?php echo translate('More') ?><?php echo $zoneMoreTicked ? ' ('.$zoneMoreTicked.')' : '' ?></summary>
+                <details id="zoneDetectionMore"<?php echo $zoneMoreTicked ? ' open' : '' ?>>
+                  <summary><?php echo translate('More') ?><span id="zoneDetectionMoreCount"><?php echo $zoneMoreTicked ? ' ('.$zoneMoreTicked.')' : '' ?></span></summary>
 <?php foreach (array_merge(detection_labels_animals(), detection_labels_more()) as $l) echo $zoneTick($l); ?>
                 </details>
               </div>

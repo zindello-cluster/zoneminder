@@ -126,7 +126,10 @@ Every change is marked `zindello-cluster` in a comment where it sits.
       settings (Preset, Alarm Colour, Alarm Check Method and the pixel settings) are greyed out
       for every type and no longer required: read-only and out of reach, not disabled, so
       ZoneMinder's own enabling still decides what's posted and a Save keeps them as they were.
-      Extend Alarm Frames stays for a Preclusive zone. `js/zone_detection.js` (new), called from
+      Extend Alarm Frames stays for a Preclusive zone. "Tick all · Untick all" above the types
+      ticks or unticks every one, More's included, the thresholds left as they are, and More's
+      count follows the ticks (cluster-docs `docs/zoneminder-zone-tick-all.md`, O947; tested in
+      `tests/zone_detection.test.js`). `js/zone_detection.js` (new), called from
       `views/js/zone.js` (`applyZoneType`, `validateForm`); `includes/actions/zone.php` (the
       refusal); `includes/zone_labels.php`, `views/_zone_detection.php`.
     - **The monitor page:** Analysis FPS is live detection's rate and Alarm Frame Count its samples
