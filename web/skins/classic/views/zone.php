@@ -310,6 +310,8 @@ if ( count($other_zones) ) {
 						</table>
 <?php // zindello-cluster: the Live detection section, the types live detection ignores in this zone ?>
 <?php include('_zone_detection.php'); ?>
+<?php // zindello-cluster: the points' markers, to the image's last pixel on every side ?>
+<?php echo output_script_if_exists(array('js/zone_points.js')); ?>
 					</div>
       </form>
     </div><!--content-->

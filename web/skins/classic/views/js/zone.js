@@ -334,28 +334,16 @@ function constrainValue(value, loVal, hiVal) {
   return value;
 }
 
-function updateActivePoint(index) {
+function updateActivePoint(index, position) {
+  // zindello-cluster: the marker's anchor as the pixel, rounded and kept on the image
+  // (js/zone_points.js); during a drag, the position jQuery UI is about to give it.
   const point = $j('#point'+index);
-  const imageFrame = document.getElementById('imageFrame');
-  const style = imageFrame.currentStyle || window.getComputedStyle(imageFrame);
-  const padding_left = parseInt(style.paddingLeft);
-  const padding_top = parseInt(style.paddingTop);
-  const padding_right = parseInt(style.paddingRight);
-  const scale = (imageFrame.clientWidth - ( padding_left + padding_right )) / maxX;
-
-  let point_left = parseInt(point.css('left'), 10);
-  if ( point_left < padding_left ) {
-    point.css('left', style.paddingLeft);
-    point_left = parseInt(padding_left);
-  }
-  let point_top = parseInt(point.css('top'));
-  if ( point_top < padding_top ) {
-    point.css('top', style.paddingTop);
-    point_top = parseInt(padding_top);
-  }
-
-  var x = constrainValue(Math.ceil(point_left / scale)-Math.ceil(padding_left/scale), 0, maxX);
-  var y = constrainValue(Math.ceil(point_top / scale)-Math.ceil(padding_top/scale), 0, maxY);
+  const frame = ZMZonePoints.frameOf(document.getElementById('imageFrame'), maxX);
+  const left = position ? position.left : parseFloat(point.css('left'));
+  const top = position ? position.top : parseFloat(point.css('top'));
+  const p = ZMZonePoints.fromCss(frame, left, top, maxX, maxY);
+  var x = p.x;
+  var y = p.y;
 
   zone['Points'][index].x = document.getElementById('newZone[Points]['+index+'][x]').value = x;
   zone['Points'][index].y = document.getElementById('newZone[Points]['+index+'][y]').value = y;
@@ -411,13 +399,9 @@ function updateX(input) {
 
   const point = $j('#point'+index);
   const x = input.value;
-  const imageFrame = document.getElementById('imageFrame');
-  const style = imageFrame.currentStyle || window.getComputedStyle(imageFrame);
-  const padding_left = parseInt(style.paddingLeft);
-  const padding_right = parseInt(style.paddingRight);
-  const scale = (imageFrame.clientWidth - ( padding_left + padding_right )) / maxX;
-
-  point.css('left', parseInt(x*scale)+'px');
+  // zindello-cluster: placed as drawZonePoints places it (js/zone_points.js).
+  const frame = ZMZonePoints.frameOf(document.getElementById('imageFrame'), maxX);
+  point.css('left', ZMZonePoints.toCss(frame, x, 0).left+'px');
   zone['Points'][index].x = x;
   const Point = document.getElementById('zonePoly').points.getItem(index);
   Point.x = x;
@@ -431,13 +415,9 @@ function updateY(input) {
 
   const point = $j('#point'+index);
   const y = input.value;
-  const imageFrame = document.getElementById('imageFrame');
-  const style = imageFrame.currentStyle || window.getComputedStyle(imageFrame);
-  const padding_left = parseInt(style.paddingLeft);
-  const padding_right = parseInt(style.paddingRight);
-  const scale = (imageFrame.clientWidth - ( padding_left + padding_right )) / maxX;
-
-  point.css('top', parseInt(y*scale)+'px');
+  // zindello-cluster: placed as drawZonePoints places it (js/zone_points.js).
+  const frame = ZMZonePoints.frameOf(document.getElementById('imageFrame'), maxX);
+  point.css('top', ZMZonePoints.toCss(frame, 0, y).top+'px');
   zone['Points'][index].y = y;
   const Point = document.getElementById('zonePoly').points.getItem(index);
   Point.y = y;
@@ -460,13 +440,10 @@ function saveChanges(element) {
 }
 
 function drawZonePoints() {
-  var imageFrame = document.getElementById('imageFrame');
   $j('.zonePoint').remove();
-  var style = imageFrame.currentStyle || window.getComputedStyle(imageFrame);
-  var padding_left = parseInt(style.paddingLeft);
-  var padding_right = parseInt(style.paddingRight);
-  var padding_top = parseInt(style.paddingTop);
-  var scale = (imageFrame.clientWidth - ( padding_left + padding_right )) / maxX;
+  // zindello-cluster: each marker's anchor is its point, kept on the image to the last pixel on
+  // every side (js/zone_points.js).
+  var frame = ZMZonePoints.frameOf(document.getElementById('imageFrame'), maxX);
 
   $j.each( zone['Points'], function(i, coord) {
     var div = $j('<div>');
@@ -476,9 +453,10 @@ function drawZonePoints() {
       'class': 'zonePoint',
       'title': 'Point '+(i+1)
     });
+    var css = ZMZonePoints.toCss(frame, coord.x, coord.y);
     div.css({
-      left: (Math.round(coord.x * scale) + padding_left)+"px",
-      top: ((parseInt(coord.y * scale)) + padding_top) +"px"
+      left: css.left+"px",
+      top: css.top+"px"
     });
 
     div.mouseover(highlightOn.bind(i, i));
@@ -487,10 +465,12 @@ function drawZonePoints() {
     $j('#imageFrame').append(div);
 
     div.draggable({
-      'containment': document.getElementById('imageFeed'+zone.MonitorId),
       'start': setActivePoint.bind(i, i),
       'stop': fixActivePoint.bind(i, i),
-      'drag': updateActivePoint.bind(i, i)
+      'drag': function(event, ui) {
+        ZMZonePoints.keepOnImage(ZMZonePoints.frameOf(document.getElementById('imageFrame'), maxX), ui.position, maxX, maxY);
+        updateActivePoint(i, ui.position);
+      }
     });
   }); // end $j.each point
 

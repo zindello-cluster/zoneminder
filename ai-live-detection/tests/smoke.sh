@@ -725,6 +725,13 @@ has "Untick all beside it" 'class="zoneDetectionTickAll" data-tick="0">Untick al
 has "its script: the links" 'zoneDetectionTickAll' \
   "$(docker exec "$name" cat /usr/share/zoneminder/www/skins/classic/js/zone_detection.js)"
 node ai-live-detection/tests/zone_detection.test.js || fail "Tick all and Untick all"
+# The points' markers to the image's last pixel on every side (js/zone_points.js; 28 November 2026):
+# on the page, used by zone.js in place of jQuery UI's containment, and their arithmetic on its own
+# (tests/zone_points.test.js).
+has "the points' script on the page" 'zone_points' "$page"
+has "zone.js keeps each point's anchor on the image" 'ZMZonePoints.keepOnImage' \
+  "$(docker exec "$name" cat /usr/share/zoneminder/www/skins/classic/views/js/zone.js)"
+node ai-live-detection/tests/zone_points.test.js || fail "a point to the image's last pixel"
 has "its script: the ticks on every type but Privacy" 'Privacy: false' \
   "$(docker exec "$name" cat /usr/share/zoneminder/www/skins/classic/js/zone_detection.js)"
 # The table as the chart's seed makes it (deploy/live/schema.sql there), with the zone's own thresholds.

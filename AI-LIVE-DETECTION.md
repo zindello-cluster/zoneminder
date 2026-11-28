@@ -158,6 +158,18 @@ Every change is marked `zindello-cluster` in a comment where it sits.
     with one warning per try and one line when it works. It sleeps a second at a time, so stopping
     `zmc` isn't held up. Meanwhile the camera's analysis waits; capture goes on into the packet
     queue, which drops its oldest frames past its cap. Tested by `tests/zm_db_outage.cpp`.
+16. **A zone's points reach the image's last pixel on every side** (the owner, 28 November 2026:
+    "Yes prepare both fixes"; cluster-docs `docs/zoneminder-detection-exclusions.md`). Upstream's
+    zone page kept each point's marker inside the image with jQuery UI's containment. That stops
+    the marker's 7 px box at the edge, not its anchor, which is the point, so a point stopped 4 CSS
+    px short of the right and bottom edges. On a 2560×1440 camera that's 12 camera pixels: column
+    2547 and row 1427, not 2559 and 1439. Now the drag keeps the anchor itself on the image, from
+    0 to `maxX` and `maxY`. The anchor is turned back into a pixel by rounding, where upstream took
+    `Math.ceil` of a whole-pixel left and top, so every pixel drawn reads back as itself, the last
+    ones included. Typing a number places the marker the same way (upstream left out the frame's
+    padding there). `js/zone_points.js` (new; included by `views/zone.php`), used by `views/js/zone.js`
+    (`drawZonePoints`, `updateActivePoint`, `updateX`, `updateY`); tested in
+    `tests/zone_points.test.js`.
 
 `git log $(cat ai-live-detection/UPSTREAM_RELEASE)..ai-live-detection -- web src tests` lists them.
 
